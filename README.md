@@ -10,6 +10,7 @@ The following information is gathered by the tool:
 
 * Tenant
 * Domain
+* Licenses
 * Users
 * ServicePrincipals
 * DirectoryRoles
@@ -85,7 +86,7 @@ When you run AzureADRecon, a `AzureADRecon-Report-<timestamp>` folder will be cr
 
 -Collect <String>
     Which modules to run (Comma separated; e.g Tenant,Domain. Default all)
-    Valid values include: Tenant, Domain, Users, ServicePrincipals, DirectoryRoles, DirectoryRoleMembers, Groups, GroupMembers, Devices.
+    Valid values include: Tenant, Domain, Licenses, Users, ServicePrincipals, DirectoryRoles, DirectoryRoleMembers, Groups, GroupMembers, Devices.
 
 -OutputType <String>
     Output Type; Comma seperated; e.g CSV,STDOUT,Excel (Default STDOUT with -Collect parameter, else CSV and Excel).
