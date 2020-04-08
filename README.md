@@ -39,7 +39,7 @@ These instructions will get you a copy of the tool up and running on your local 
 If you have git installed, you can start by cloning the [repository](https://github.com/adrecon/AzureADRecon/):
 
 ```
-git clone https://github.com/adrecon/ADRecon.git
+git clone https://github.com/adrecon/AzureADRecon.git
 ```
 
 Otherwise, you can [download a zip archive of the latest release](https://github.com/adrecon/AzureADRecon/archive/master.zip). The intent is to always keep the master branch in a working state.
