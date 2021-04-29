@@ -667,6 +667,8 @@ namespace AADRecon
                     AzureADUserObj.Members.Add(new PSNoteProperty("CreatedDateTime", ((Dictionary<string, string>) AzureAdUser.Members["ExtensionProperty"].Value)["createdDateTime"]));
                     AzureADUserObj.Members.Add(new PSNoteProperty("LastDirSyncTime", AzureAdUser.Members["LastDirSyncTime"].Value));
                     AzureADUserObj.Members.Add(new PSNoteProperty("EmployeeId", ((Dictionary<string, string>) AzureAdUser.Members["ExtensionProperty"].Value)["employeeId"]));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("Mobile", AzureAdUser.Members["Mobile"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("TelephoneNumber", AzureAdUser.Members["TelephoneNumber"].Value));
                     AzureADUserObj.Members.Add(new PSNoteProperty("userIdentities", AzureAdUser.Members["userIdentities"] != null ? AzureAdUser.Members["userIdentities"].Value : null));
                     AzureADUserObj.Members.Add(new PSNoteProperty("odata.type", ((Dictionary<string, string>) AzureAdUser.Members["ExtensionProperty"].Value)["odata.type"]));
                     AzureADUserObj.Members.Add(new PSNoteProperty("ObjectId", AzureAdUser.Members["ObjectId"].Value));
