@@ -1,4 +1,4 @@
-﻿<#
+<#
 
 .SYNOPSIS
 
@@ -56,6 +56,9 @@
 .PARAMETER GenExcel
 	Path for AzureADRecon output folder containing the CSV files to generate the AzureADRecon-Report.xlsx. Use it to generate the AzureADRecon-Report.xlsx when Microsoft Excel is not installed on the host used to run AzureADRecon.
 
+.PARAMETER TenantID
+    The Azure TenantID to connect to when you have multiple tenants.
+
 .PARAMETER OutputDir
 	Path for AzureADRecon output folder to save the files and the AzureADRecon-Report.xlsx. (The folder specified will be created if it doesn't exist)
 
@@ -102,6 +105,9 @@ param
     [Parameter(Mandatory = $false, HelpMessage = "Which method to use; AzureAD (default).")]
     [ValidateSet('AzureAD')]
     [string] $Method = 'AzureAD',
+
+    [Parameter(Mandatory = $false, HelpMessage = "Which Tenant ID to connect to, picks up the default tenant ID if nothing specified")]
+    [string] $TenantID,
 
     [Parameter(Mandatory = $false, HelpMessage = "Azure Credentials.")]
     [Management.Automation.PSCredential] $Credential = [Management.Automation.PSCredential]::Empty,
@@ -3307,7 +3313,14 @@ Function Invoke-AzureADRecon
             Write-Output "[Invoke-AzureADRecon] AzureAD Module is installed. Logging in ..."
             If ($Credential -eq [Management.Automation.PSCredential]::Empty)
             {
-                Connect-AzureAD | Out-Null
+                If ($TenantID)
+                {
+                    Connect-AzureAD  -TenantID $TenantID | Out-Null
+                }
+                Else
+                {
+                    Connect-AzureAD | Out-Null
+                }
             }
             Else
             {
