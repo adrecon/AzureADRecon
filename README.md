@@ -81,6 +81,9 @@ When you run AzureADRecon, a `AzureADRecon-Report-<timestamp>` folder will be cr
 -GenExcel <String>
     Path for AzureADRecon output folder containing the CSV files to generate the AzureADRecon-Report.xlsx. Use it to generate the AzureADRecon-Report.xlsx when Microsoft Excel is not installed on the host used to run AzureADRecon.
 
+-TenantID <String>
+   The Azure TenantID to connect to when you have multiple tenants.
+
 -OutputDir <String>
     Path for AzureADRecon output folder to save the CSV/XML/JSON/HTML files and the AzureADRecon-Report.xlsx. (The folder specified will be created if it doesn't exist) (Default pwd)
 
