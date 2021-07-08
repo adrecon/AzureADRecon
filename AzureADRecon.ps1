@@ -3324,7 +3324,14 @@ Function Invoke-AzureADRecon
             }
             Else
             {
-                Connect-AzureAD -Credential $Credential | Out-Null
+				 If ($TenantID)
+                {
+                    Connect-AzureAD -TenantID $TenantID -Credential $Credential | Out-Null
+                }
+                Else
+                {
+                    Connect-AzureAD -Credential $Credential | Out-Null
+                }
             }
         }
         Catch
