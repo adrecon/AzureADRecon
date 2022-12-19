@@ -2015,6 +2015,21 @@ Function Export-ADRExcel
         [string] $ExcelPath
     )
 
+    If ($PSVersionTable.PSEdition -eq "Core")
+    {
+        If ($PSVersionTable.Platform -eq "Win32NT")
+        {
+            $returndir = Get-Location
+            Set-Location C:\Windows\assembly\
+            $refFolder = (Get-ChildItem -Recurse  Microsoft.Office.Interop.Excel.dll).Directory
+            Set-Location $refFolder
+            Add-Type -AssemblyName "Microsoft.Office.Interop.Excel"
+            Set-Location $returndir
+            Remove-Variable returndir
+            Remove-Variable refFolder
+        }
+    }
+
     $ExcelPath = $((Convert-Path $ExcelPath).TrimEnd("\"))
     $ReportPath = -join($ExcelPath,'\','CSV-Files')
     If (!(Test-Path $ReportPath))
@@ -2995,7 +3010,16 @@ Function Invoke-AzureADRecon
         [int] $Threads = 10
     )
 
-    [string] $AzureADReconVersion = "v0.01"
+    If ($PSVersionTable.PSEdition -eq "Core")
+    {
+        If ($PSVersionTable.Platform -ne "Win32NT")
+        {
+            Write-Warning "[Invoke-AzureADRecon] Currently not supported ... Exiting"
+            #Return $null
+        }
+    }
+
+    [string] $AzureADReconVersion = "v0.02"
     Write-Output "[*] AzureADRecon $AzureADReconVersion by Prashant Mahajan (@prashant3535)"
 
     If ($GenExcel)
@@ -3009,69 +3033,24 @@ Function Invoke-AzureADRecon
         Return $null
     }
 
-    # Suppress verbose output
-    $SaveVerbosePreference = $script:VerbosePreference
-    $script:VerbosePreference = 'SilentlyContinue'
-    Try
-    {
-        If ($PSVersionTable.PSVersion.Major -ne 2)
-        {
-            $computer = Get-CimInstance -ClassName Win32_ComputerSystem
-            $computerdomainrole = ($computer).DomainRole
-        }
-        Else
-        {
-            $computer = Get-WMIObject win32_computersystem
-            $computerdomainrole = ($computer).DomainRole
-        }
-    }
-    Catch
-    {
-        Write-Output "[Invoke-AzureADRecon] $($_.Exception.Message)"
-    }
-    If ($SaveVerbosePreference)
-    {
-        $script:VerbosePreference = $SaveVerbosePreference
-        Remove-Variable SaveVerbosePreference
-    }
-
-    switch ($computerdomainrole)
-    {
-        0
-        {
-            [string] $computerrole = "Standalone Workstation"
-            $Env:ADPS_LoadDefaultDrive = 0
-            $UseAltCreds = $true
-        }
-        1 { [string] $computerrole = "Member Workstation" }
-        2
-        {
-            [string] $computerrole = "Standalone Server"
-            $UseAltCreds = $true
-            $Env:ADPS_LoadDefaultDrive = 0
-        }
-        3 { [string] $computerrole = "Member Server" }
-        4 { [string] $computerrole = "Backup Domain Controller" }
-        5 { [string] $computerrole = "Primary Domain Controller" }
-        default { Write-Output "Computer Role could not be identified." }
-    }
-
-    $RanonComputer = "$($computer.domain)\$([Environment]::MachineName) - $($computerrole)"
-    Remove-Variable computer
-    Remove-Variable computerdomainrole
-    Remove-Variable computerrole
-
     # Import AzureAD module
-    If ($Method -eq 'AzureAD')
-    {
-        If (Get-Module -ListAvailable -Name AzureAD)
-        {
-            Try
-            {
+    If ($Method -eq 'AzureAD') {
+        If (Get-Module -ListAvailable -Name AzureAD) {
+            Try {
                 # Suppress verbose output on module import
                 $SaveVerbosePreference = $script:VerbosePreference;
                 $script:VerbosePreference = 'SilentlyContinue';
-                Import-Module AzureAD -WarningAction Stop -ErrorAction Stop | Out-Null
+                If ($PSVersionTable.PSEdition -eq "Core")
+                {
+                    If ($PSVersionTable.Platform -ne "Win32NT")
+                    {
+                        Import-Module AzureAD -UseWindowsPowerShell -ErrorAction Stop | Out-Null
+                    }
+                }
+                Else
+                {
+                    Import-Module AzureAD -WarningAction Stop -ErrorAction Stop | Out-Null
+                }
                 If ($SaveVerbosePreference)
                 {
                     $script:VerbosePreference = $SaveVerbosePreference
@@ -3096,6 +3075,60 @@ Function Invoke-AzureADRecon
         }
     }
 
+    If ($PSVersionTable.Platform -ne "Win32NT") {
+        $RanonComputer = "$([Environment]::MachineName)"
+    }
+    Else
+    {
+        # Suppress verbose output
+        $SaveVerbosePreference = $script:VerbosePreference
+        $script:VerbosePreference = 'SilentlyContinue'
+        Try
+        {
+            If ($PSVersionTable.PSVersion.Major -ne 2)
+            {
+                $computer = Get-CimInstance -ClassName Win32_ComputerSystem
+                $computerdomainrole = ($computer).DomainRole
+            }
+            Else
+            {
+                $computer = Get-WMIObject win32_computersystem
+                $computerdomainrole = ($computer).DomainRole
+            }
+        }
+        Catch
+        {
+            Write-Output "[Invoke-AzureADRecon] $($_.Exception.Message)"
+        }
+        If ($SaveVerbosePreference)
+        {
+            $script:VerbosePreference = $SaveVerbosePreference
+            Remove-Variable SaveVerbosePreference
+        }
+
+        switch ($computerdomainrole)
+        {
+            0
+            {
+                [string] $computerrole = "Standalone Workstation"
+            }
+            1 { [string] $computerrole = "Member Workstation" }
+            2
+            {
+                [string] $computerrole = "Standalone Server"
+            }
+            3 { [string] $computerrole = "Member Server" }
+            4 { [string] $computerrole = "Backup Domain Controller" }
+            5 { [string] $computerrole = "Primary Domain Controller" }
+            default { Write-Output "Computer Role could not be identified." }
+        }
+
+        $RanonComputer = "$($computer.domain)\$([Environment]::MachineName) - $($computerrole)"
+        Remove-Variable computer
+        Remove-Variable computerdomainrole
+        Remove-Variable computerrole
+    }
+
     # Compile C# code
     # Suppress Debug output
     $SaveDebugPreference = $script:DebugPreference
@@ -3106,18 +3139,36 @@ Function Invoke-AzureADRecon
         {
             $AzureADModulePath = (Get-Module -ListAvailable AzureAD).path | Split-Path
             $CLR = ([System.Reflection.Assembly]::GetExecutingAssembly().ImageRuntimeVersion)[1]
+            If ($PSVersionTable.PSEdition -eq "Core")
+            {
+                $refFolder = Join-Path -Path (Split-Path([PSObject].Assembly.Location)) -ChildPath "ref"
+                Add-Type -TypeDefinition $($AzureADSource) -ReferencedAssemblies ([System.String[]]@(
+                    (Join-Path -Path $refFolder -ChildPath "System.Collections.dll")
+                    (Join-Path -Path $refFolder -ChildPath "System.Collections.NonGeneric.dll")
+                    (Join-Path -Path $refFolder -ChildPath "System.Threading.dll")
+                    (Join-Path -Path $refFolder -ChildPath "System.Threading.Thread.dll")
+                    (Join-Path -Path $refFolder -ChildPath "mscorlib.dll")
+                    (Join-Path -Path $AzureADModulePath -ChildPath "Microsoft.Open.AzureAD16.Graph.Client.dll")
+                    #([System.Reflection.Assembly]::LoadWithPartialName("mscorlib")).Location
+                    ([System.Reflection.Assembly]::LoadWithPartialName("System.Linq")).Location
+                    ([System.Reflection.Assembly]::LoadWithPartialName("System.Console")).Location
+                    ([System.Reflection.Assembly]::LoadWithPartialName("System.ComponentModel.DataAnnotations")).Location
+                    ([System.Reflection.Assembly]::LoadWithPartialName("System.Management.Automation")).Location
+                ))
+                Remove-Variable refFolder
+            }
             If ($CLR -eq "4")
             {
                 Add-Type -TypeDefinition $($AzureADSource) -ReferencedAssemblies ([System.String[]]@(
                     ([System.Reflection.Assembly]::LoadWithPartialName("System.ComponentModel.DataAnnotations")).Location
-                    ($AzureADModulePath + "\Microsoft.Open.AzureAD16.Graph.Client.dll")
+                    (Join-Path -Path $AzureADModulePath -ChildPath "Microsoft.Open.AzureAD16.Graph.Client.dll")
                 ))
             }
             Else
             {
                 Add-Type -TypeDefinition $($AzureADSource) -ReferencedAssemblies ([System.String[]]@(
                     ([System.Reflection.Assembly]::LoadWithPartialName("System.ComponentModel.DataAnnotations")).Location
-                    ($AzureADModulePath + "\Microsoft.Open.AzureAD16.Graph.Client.dll")
+                    (Join-Path -Path $AzureADModulePath -ChildPath "Microsoft.Open.AzureAD16.Graph.Client.dll")
                 ))
             }
             Remove-Variable AzureADModulePath
@@ -3338,6 +3389,7 @@ Function Invoke-AzureADRecon
         {
             Write-Warning "[Invoke-AzureADRecon] Error authenticating to AzureAD ... Exiting"
             Write-Verbose "[EXCEPTION] $($_.Exception.Message)"
+            Remove-EmptyAADROutputDir $AADROutputDir $OutputType
             Return $null
         }
     }
