@@ -26,9 +26,14 @@ These instructions will get you a copy of the tool up and running on your local 
 ### Prerequisites
 
 * .NET Framework 3.0 or later (Windows 7 includes 3.0)
-* PowerShell 2.0 or later (Windows 7 includes 2.0)
-* AzureAD PowerShell Module (https://www.powershellgallery.com/packages/AzureAD/) Requires PowerShell 3.0 or later
-    * `Install-Module -Name AzureAD`
+* PowerShell
+    * PowerShell 2.0 or later (Windows 7 includes 2.0)
+        * AzureAD PowerShell Module (https://www.powershellgallery.com/packages/AzureAD/) Requires PowerShell 3.0 or later
+        * `Install-Module -Name AzureAD`
+    * Limited PowerShell Core support (Tested on PowerShell v7.3.1; Excel generation requires Windows)
+        * Microsoft Graph Module (https://www.powershellgallery.com/packages/microsoft.graph)
+        * `Install-Module -Name Microsoft.Graph`
+        * Scopes required: AuditLog.Read.All, User.Read.All, UserAuthenticationMethod.Read.All
 
 ### Optional
 
@@ -67,13 +72,19 @@ To generate the AzureADRecon-Report.xlsx based on AzureADRecon output (CSV Files
 PS C:\>.\AzureADRecon.ps1 -GenExcel C:\AzureADRecon-Report-<timestamp>
 ```
 
+Fill in the relevant details in the `MSGraph-Credentials.csv` and use the following command
+
+```
+PS C:\>.\AzureADRecon.ps1 -Method MSGraph
+```
+
 When you run AzureADRecon, a `AzureADRecon-Report-<timestamp>` folder will be created which will contain AzureADRecon-Report.xlsx and CSV-Folder with the raw files.
 
 ### Parameters
 
 ```
 -Method <String>
-    Which method to use; AzureAD (default)
+    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts)
 
 -Credential <PSCredential>
     Domain Credentials.
@@ -94,6 +105,15 @@ When you run AzureADRecon, a `AzureADRecon-Report-<timestamp>` folder will be cr
 -OutputType <String>
     Output Type; Comma seperated; e.g CSV,STDOUT,Excel (Default STDOUT with -Collect parameter, else CSV and Excel).
     Valid values include: STDOUT, CSV, XML, JSON, HTML, Excel, All (excludes STDOUT).
+
+-DormantTimeSpan <Int>
+    Timespan for Dormant accounts. (Default 30 days)
+
+-PassMaxAge <Int>
+    Maximum machine account password age. (Default 90 days)
+
+-PageSize <Int>
+    The PageSize to set for the LDAP searcher object. (Default 200)
 
 -Threads <Int>
     The number of threads to use during processing objects (Default 10)

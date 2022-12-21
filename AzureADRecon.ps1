@@ -48,7 +48,7 @@
     powershell.exe -nologo -executionpolicy bypass -noprofile -file AzureADRecon.ps1
 
 .PARAMETER Method
-	Which method to use; AzureAD (default)
+	Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts)
 
 .PARAMETER Credential
 	Domain Credentials.
@@ -70,11 +70,24 @@
     Output Type; Comma seperated; e.g STDOUT,CSV,XML,JSON,HTML,Excel (Default STDOUT with -Collect parameter, else CSV and Excel).
     Valid values include: STDOUT, CSV, XML, JSON, HTML, Excel, All (excludes STDOUT).
 
+.PARAMETER DormantTimeSpan
+    Timespan for Dormant accounts. (Default 30 days)
+
+.PARAMETER PassMaxAge
+    Timespan for Password age. (Default 90 days)
+
+.PARAMETER PageSize
+    The PageSize to set for the MSGraph query. (Default 200)
+
 .PARAMETER Threads
     The number of threads to use during processing objects. (Default 10)
 
 .PARAMETER Log
     Create AzureADRecon Log using Start-Transcript
+
+.PARAMETER Logo
+    Which Logo to use in the excel file? (Default AzureADRecon)
+    Values include AzureADRecon, Payatu.
 
 .EXAMPLE
 
@@ -103,7 +116,7 @@
 param
 (
     [Parameter(Mandatory = $false, HelpMessage = "Which method to use; AzureAD (default).")]
-    [ValidateSet('AzureAD')]
+    [ValidateSet('AzureAD', 'MSGraph')]
     [string] $Method = 'AzureAD',
 
     [Parameter(Mandatory = $false, HelpMessage = "Which Tenant ID to connect to, picks up the default tenant ID if nothing specified")]
@@ -126,12 +139,28 @@ param
     [ValidateSet('STDOUT', 'CSV', 'XML', 'JSON', 'EXCEL', 'HTML', 'All', 'Default')]
     [array] $OutputType = 'Default',
 
+    [Parameter(Mandatory = $false, HelpMessage = "Timespan for Dormant accounts. Default 30 days")]
+    [ValidateRange(1,1000)]
+    [int] $DormantTimeSpan = 30,
+
+    [Parameter(Mandatory = $false, HelpMessage = "Timespan for Password age. Default 90 days")]
+    [ValidateRange(1,1000)]
+    [int] $PassMaxAge = 90,
+
+    [Parameter(Mandatory = $false, HelpMessage = "The PageSize to set for the MSGraph query. Default 200")]
+    [ValidateRange(1,10000)]
+    [int] $PageSize = 200,
+
     [Parameter(Mandatory = $false, HelpMessage = "The number of threads to use during processing of objects. Default 10")]
     [ValidateRange(1,100)]
     [int] $Threads = 10,
 
     [Parameter(Mandatory = $false, HelpMessage = "Create AzureADRecon Log using Start-Transcript")]
-    [switch] $Log
+    [switch] $Log,
+
+    [Parameter(Mandatory = $false, HelpMessage = "Which Logo to use in the excel file? Default AzureADRecon")]
+    [ValidateSet('AzureADRecon', 'Payatu')]
+    [string] $Logo = "AzureADRecon"
 )
 
 $AzureADSource = @"
@@ -488,6 +517,7 @@ namespace AADRecon
                         "Country", AzureADTenant.Members["Country"].Value,
                         "CountryLetterCode", AzureADTenant.Members["CountryLetterCode"].Value,
                         "TechnicalNotificationMails", TechnicalNotificationMails
+                        "TelephoneNumber", AzureADTenant.Members["TelephoneNumber"].Value
                     };
                     for (icount = 0; icount < ObjValues.Length; icount++)
                     {
@@ -652,7 +682,15 @@ namespace AADRecon
                     AzureADUserObj.Members.Add(new PSNoteProperty("DisplayName", CleanString(AzureAdUser.Members["DisplayName"].Value)));
                     AzureADUserObj.Members.Add(new PSNoteProperty("Enabled", AzureAdUser.Members["AccountEnabled"].Value));
                     AzureADUserObj.Members.Add(new PSNoteProperty("UserType", AzureAdUser.Members["UserType"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("JobTitle", AzureAdUser.Members["JobTitle"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("Department", AzureAdUser.Members["Department"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("Mobile", AzureAdUser.Members["Mobile"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("TelephoneNumber", AzureAdUser.Members["TelephoneNumber"].Value));
                     AzureADUserObj.Members.Add(new PSNoteProperty("DirSyncEnabled", AzureAdUser.Members["DirSyncEnabled"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("OnPremisesSecurityIdentifier",  AzureAdUser.Members["OnPremisesSecurityIdentifier"] != null ? AzureAdUser.Members["OnPremisesSecurityIdentifier"].Value : null));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("OnPremisesDistinguishedName", CleanString(((Dictionary<string, string>) AzureAdUser.Members["ExtensionProperty"].Value)["onPremisesDistinguishedName"])));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("LastDirSyncTime", AzureAdUser.Members["LastDirSyncTime"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("whenCreated", ((Dictionary<string, string>) AzureAdUser.Members["ExtensionProperty"].Value)["createdDateTime"]));
 
                     if (((List<Microsoft.Open.AzureAD.Model.AssignedLicense>) AzureAdUser.Members["AssignedLicenses"].Value).Count != 0)
                     {
@@ -665,21 +703,11 @@ namespace AADRecon
                         AssignedLicenses = AssignedLicenses.TrimStart(',');
                         AssignedLicensesName = AssignedLicensesName.TrimStart(',');
                     }
-                    AzureADUserObj.Members.Add(new PSNoteProperty("AssignedLicensesName", AssignedLicensesName));
 
-                    AzureADUserObj.Members.Add(new PSNoteProperty("PasswordPolicies", AzureAdUser.Members["PasswordPolicies"].Value));
-                    AzureADUserObj.Members.Add(new PSNoteProperty("OnPremisesSecurityIdentifier",  AzureAdUser.Members["OnPremisesSecurityIdentifier"] != null ? AzureAdUser.Members["OnPremisesSecurityIdentifier"].Value : null));
-                    AzureADUserObj.Members.Add(new PSNoteProperty("OnPremisesDistinguishedName", CleanString(((Dictionary<string, string>) AzureAdUser.Members["ExtensionProperty"].Value)["onPremisesDistinguishedName"])));
-                    AzureADUserObj.Members.Add(new PSNoteProperty("CreatedDateTime", ((Dictionary<string, string>) AzureAdUser.Members["ExtensionProperty"].Value)["createdDateTime"]));
-                    AzureADUserObj.Members.Add(new PSNoteProperty("LastDirSyncTime", AzureAdUser.Members["LastDirSyncTime"].Value));
-                    AzureADUserObj.Members.Add(new PSNoteProperty("EmployeeId", ((Dictionary<string, string>) AzureAdUser.Members["ExtensionProperty"].Value)["employeeId"]));
-                    AzureADUserObj.Members.Add(new PSNoteProperty("Mobile", AzureAdUser.Members["Mobile"].Value));
-                    AzureADUserObj.Members.Add(new PSNoteProperty("TelephoneNumber", AzureAdUser.Members["TelephoneNumber"].Value));
-                    AzureADUserObj.Members.Add(new PSNoteProperty("userIdentities", AzureAdUser.Members["userIdentities"] != null ? AzureAdUser.Members["userIdentities"].Value : null));
-                    AzureADUserObj.Members.Add(new PSNoteProperty("odata.type", ((Dictionary<string, string>) AzureAdUser.Members["ExtensionProperty"].Value)["odata.type"]));
-                    AzureADUserObj.Members.Add(new PSNoteProperty("ObjectId", AzureAdUser.Members["ObjectId"].Value));
-                    AzureADUserObj.Members.Add(new PSNoteProperty("ObjectType", AzureAdUser.Members["ObjectType"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("Assigned Licenses (Count)", ((List<Microsoft.Open.AzureAD.Model.AssignedLicense>) AzureAdUser.Members["AssignedLicenses"].Value).Count));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("AssignedLicensesName", AssignedLicensesName));
                     AzureADUserObj.Members.Add(new PSNoteProperty("AssignedLicenses", AssignedLicenses));
+
                     return new PSObject[] { AzureADUserObj };
                 }
                 catch (Exception e)
@@ -1761,8 +1789,28 @@ Function Get-ADRExcelAttributeStats
             $ExcelColumn = ($SrcWorksheet.Columns.Find($_))
             $ColAddress = "$($ExcelColumn.Address($false,$false).Substring(0,$ExcelColumn.Address($false,$false).Length-1)):$($ExcelColumn.Address($false,$false).Substring(0,$ExcelColumn.Address($false,$false).Length-1))"
             $row++
-            $i++
-            $worksheet.Cells.Item($row, $column).Formula = "='" + $SrcWorksheet.Name + "'!" + $ExcelColumn.Address($false,$false)
+
+            If ($_ -eq "UserType")
+            {
+                $worksheet.Cells.Item($row, $column) = "Guest"
+            }
+            ElseIf ($_ -eq "MFAStat")
+            {
+                $worksheet.Cells.Item($row, $column) = "MFA (Disabled)"
+            }
+            ElseIf ($_ -eq "MFAStatu")
+            {
+                $worksheet.Cells.Item($row, $column) = "MFA (Weak)"
+            }
+            ElseIf ($_ -eq "MFAStatus")
+            {
+                $worksheet.Cells.Item($row, $column) = "MFA (Strong)"
+            }
+            Else
+            {
+                $worksheet.Cells.Item($row, $column).Formula = "='" + $SrcWorksheet.Name + "'!" + $ExcelColumn.Address($false, $false)
+            }
+
             If ($_ -eq "PasswordPolicies")
             {
                 # Remove count of "None"
@@ -2007,12 +2055,19 @@ Function Export-ADRExcel
     [string]
     Path for AzureADRecon output folder containing the CSV files to generate the AzureADRecon-Report.xlsx
 
+.PARAMETER Logo
+    [string]
+    Which Logo to use in the excel file? (Default AzureADRecon)
+
 .OUTPUTS
     Creates the AzureADRecon-Report.xlsx report in the folder.
 #>
     param(
         [Parameter(Mandatory = $true)]
-        [string] $ExcelPath
+        [string] $ExcelPath,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Logo = "AzureADRecon"
     )
 
     If ($PSVersionTable.PSEdition -eq "Core")
@@ -2047,11 +2102,14 @@ Function Export-ADRExcel
         If (Test-Path $ADFileName)
         {
             Get-ADRExcelImport -ADFileName $ADFileName
-            Remove-Variable ADFileName
+
+            $Method = (Import-CSV -Path $ADFileName)[2].Category
 
             $workbook.Worksheets.Item(1).Name = "About AzureADRecon"
             $workbook.Worksheets.Item(1).Hyperlinks.Add($workbook.Worksheets.Item(1).Cells.Item(3,2) , "https://github.com/adrecon/AzureADRecon", "" , "", "github.com/adrecon/AzureADRecon") | Out-Null
             $workbook.Worksheets.Item(1).UsedRange.EntireColumn.AutoFit() | Out-Null
+
+            Remove-Variable ADFileName
         }
 
         $ADFileName = -join($ReportPath,'\','Tenant.csv')
@@ -2170,17 +2228,30 @@ Function Export-ADRExcel
             Remove-Variable ADFileName
 
             $ObjAttributes = New-Object System.Collections.Specialized.OrderedDictionary
-            $ObjAttributes.Add("DirSyncEnabled",'"TRUE"')
-            $ObjAttributes.Add("AssignedLicenses",'"*"')
-            $ObjAttributes.Add("PasswordPolicies",'"*"')
+            $ObjAttributes.Add("UserType", '"Guest"')
+
+            If ($Method -eq "AzureAD")
+            {
+                $ObjAttributes.Add("AssignedLicenses", '"*"')
+                $ObjAttributes.Add("DirSyncEnabled", '"*"')
+            }
+            ElseIf ($Method -eq "MSGraph")
+            {
+                $ObjAttributes.Add("Password Age (>", '"TRUE"')
+                $ObjAttributes.Add("Never Logged In", '"TRUE"')
+                $ObjAttributes.Add("Dormant (>", '"TRUE"')
+                $ObjAttributes.Add("MFAStat", '"Disabled"')
+                $ObjAttributes.Add("MFAStatu", '"Weak"')
+                $ObjAttributes.Add("MFAStatus", '"Strong"')
+            }
 
             Get-ADRExcelAttributeStats -SrcSheetName "Users" -Title1 "User Accounts in AzureAD" -PivotTableName "User Accounts Status" -PivotRows "Enabled" -PivotValues "UserPrincipalName" -PivotPercentage "UserPrincipalName"  -Title2 "Status of User Accounts in AzureAD" -ObjAttributes $ObjAttributes
 
-            Get-ADRExcelChart -ChartType "xlPie" -ChartLayout 3 -ChartTitle "User Accounts in AzureAD" -RangetoCover "A9:D21" -ChartData $workbook.Worksheets.Item(1).Range("A3:A4,B3:B4")
-            $workbook.Worksheets.Item(1).Hyperlinks.Add($workbook.Worksheets.Item(1).Cells.Item(8,1) , "" , "Users!A1", "", "Raw Data") | Out-Null
+            Get-ADRExcelChart -ChartType "xlPie" -ChartLayout 3 -ChartTitle "User Accounts in AzureAD" -RangetoCover "A12:D24" -ChartData $workbook.Worksheets.Item(1).Range("A3:A4,B3:B4")
+            $workbook.Worksheets.Item(1).Hyperlinks.Add($workbook.Worksheets.Item(1).Cells.Item(11,1) , "" , "Users!A1", "", "Raw Data") | Out-Null
 
-            Get-ADRExcelChart -ChartType "xlBarClustered" -ChartLayout 1 -ChartTitle "Status of User Accounts in AzureAD" -RangetoCover "F9:L21" -ChartData $workbook.Worksheets.Item(1).Range("F2:F5,G2:G5")
-            $workbook.Worksheets.Item(1).Hyperlinks.Add($workbook.Worksheets.Item(1).Cells.Item(8,6) , "" , "Users!A1", "", "Raw Data") | Out-Null
+            Get-ADRExcelChart -ChartType "xlBarClustered" -ChartLayout 1 -ChartTitle "Status of User Accounts in AzureAD" -RangetoCover "F12:L24" -ChartData $workbook.Worksheets.Item(1).Range("F2:F9,G2:G9")
+            $workbook.Worksheets.Item(1).Hyperlinks.Add($workbook.Worksheets.Item(1).Cells.Item(11,6) , "" , "Users!A1", "", "Raw Data") | Out-Null
 
             $workbook.Worksheets.Item(1).UsedRange.EntireColumn.AutoFit() | Out-Null
             $excel.Windows.Item(1).Displaygridlines = $false
@@ -2195,7 +2266,14 @@ Function Export-ADRExcel
         # $path = "C:\AzureADRecon_Logo.jpg"
         # $base64aadrecon = [convert]::ToBase64String((Get-Content $path -Encoding byte))
 
-		$base64aadrecon = "/9j/4AAQSkZJRgABAQAAkACQAAD/4QCeRXhpZgAATU0AKgAAAAgABQESAAMAAAABAAEAAAEaAAUAAAABAAAASgEbAAUAAAABAAAAUgEoAAMAAAABAAIAAIdpAAQAAAABAAAAWgAAAAAAAACQAAAAAQAAAJAAAAABAAOShgAHAAAAEgAAAISgAgAEAAAAAQAAAaagAwAEAAAAAQAAAD4AAAAAQVNDSUkAAABTY3JlZW5zaG90/+EJIWh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8APD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iWE1QIENvcmUgNS40LjAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIi8+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPD94cGFja2V0IGVuZD0idyI/PgD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/+IPrElDQ19QUk9GSUxFAAEBAAAPnGFwcGwCEAAAbW50clJHQiBYWVogB+QAAQAHABYAIwAjYWNzcEFQUEwAAAAAQVBQTAAAAAAAAAAAAAAAAAAAAAAAAPbWAAEAAAAA0y1hcHBsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARZGVzYwAAAVAAAABiZHNjbQAAAbQAAASCY3BydAAABjgAAAAjd3RwdAAABlwAAAAUclhZWgAABnAAAAAUZ1hZWgAABoQAAAAUYlhZWgAABpgAAAAUclRSQwAABqwAAAgMYWFyZwAADrgAAAAgdmNndAAADtgAAAAwbmRpbgAADwgAAAA+Y2hhZAAAD0gAAAAsbW1vZAAAD3QAAAAoYlRSQwAABqwAAAgMZ1RSQwAABqwAAAgMYWFiZwAADrgAAAAgYWFnZwAADrgAAAAgZGVzYwAAAAAAAAAIRGlzcGxheQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAG1sdWMAAAAAAAAAJgAAAAxockhSAAAAFAAAAdhrb0tSAAAADAAAAexuYk5PAAAAEgAAAfhpZAAAAAAAEgAAAgpodUhVAAAAFAAAAhxjc0NaAAAAFgAAAjBkYURLAAAAHAAAAkZubE5MAAAAFgAAAmJmaUZJAAAAEAAAAnhpdElUAAAAFAAAAohlc0VTAAAAEgAAApxyb1JPAAAAEgAAApxmckNBAAAAFgAAAq5hcgAAAAAAFAAAAsR1a1VBAAAAHAAAAthoZUlMAAAAFgAAAvR6aFRXAAAACgAAAwp2aVZOAAAADgAAAxRza1NLAAAAFgAAAyJ6aENOAAAACgAAAwpydVJVAAAAJAAAAzhlbkdCAAAAFAAAA1xmckZSAAAAFgAAA3BtcwAAAAAAEgAAA4ZoaUlOAAAAEgAAA5h0aFRIAAAADAAAA6pjYUVTAAAAGAAAA7ZlbkFVAAAAFAAAA1xlc1hMAAAAEgAAApxkZURFAAAAEAAAA85lblVTAAAAEgAAA95wdEJSAAAAGAAAA/BwbFBMAAAAEgAABAhlbEdSAAAAIgAABBpzdlNFAAAAEAAABDx0clRSAAAAFAAABExwdFBUAAAAFgAABGBqYUpQAAAADAAABHYATABDAEQAIAB1ACAAYgBvAGoAac7st+wAIABMAEMARABGAGEAcgBnAGUALQBMAEMARABMAEMARAAgAFcAYQByAG4AYQBTAHoA7QBuAGUAcwAgAEwAQwBEAEIAYQByAGUAdgBuAP0AIABMAEMARABMAEMARAAtAGYAYQByAHYAZQBzAGsA5gByAG0ASwBsAGUAdQByAGUAbgAtAEwAQwBEAFYA5AByAGkALQBMAEMARABMAEMARAAgAGMAbwBsAG8AcgBpAEwAQwBEACAAYwBvAGwAbwByAEEAQwBMACAAYwBvAHUAbABlAHUAciAPAEwAQwBEACAGRQZEBkgGRgYpBBoEPgQ7BEwEPgRABD4EMgQ4BDkAIABMAEMARCAPAEwAQwBEACAF5gXRBeIF1QXgBdlfaYJyAEwAQwBEAEwAQwBEACAATQDgAHUARgBhAHIAZQBiAG4A/QAgAEwAQwBEBCYEMgQ1BEIEPQQ+BDkAIAQWBBoALQQ0BDgEQQQ/BDsENQQ5AEMAbwBsAG8AdQByACAATABDAEQATABDAEQAIABjAG8AdQBsAGUAdQByAFcAYQByAG4AYQAgAEwAQwBECTAJAgkXCUAJKAAgAEwAQwBEAEwAQwBEACAOKg41AEwAQwBEACAAZQBuACAAYwBvAGwAbwByAEYAYQByAGIALQBMAEMARABDAG8AbABvAHIAIABMAEMARABMAEMARAAgAEMAbwBsAG8AcgBpAGQAbwBLAG8AbABvAHIAIABMAEMARAOIA7MDxwPBA8kDvAO3ACADvwO4A8wDvQO3ACAATABDAEQARgDkAHIAZwAtAEwAQwBEAFIAZQBuAGsAbABpACAATABDAEQATABDAEQAIABhACAAQwBvAHIAZQBzMKsw6TD8AEwAQwBEAAB0ZXh0AAAAAENvcHlyaWdodCBBcHBsZSBJbmMuLCAyMDIwAABYWVogAAAAAAAA8xYAAQAAAAEWylhZWiAAAAAAAACC9AAAPWT///+8WFlaIAAAAAAAAEwkAAC0hQAACuZYWVogAAAAAAAAJ74AAA4XAADIi2N1cnYAAAAAAAAEAAAAAAUACgAPABQAGQAeACMAKAAtADIANgA7AEAARQBKAE8AVABZAF4AYwBoAG0AcgB3AHwAgQCGAIsAkACVAJoAnwCjAKgArQCyALcAvADBAMYAywDQANUA2wDgAOUA6wDwAPYA+wEBAQcBDQETARkBHwElASsBMgE4AT4BRQFMAVIBWQFgAWcBbgF1AXwBgwGLAZIBmgGhAakBsQG5AcEByQHRAdkB4QHpAfIB+gIDAgwCFAIdAiYC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"
+        If ($Logo -eq "Payatu")
+        {
+            $base64adrecon = "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"
+        }
+        Else
+        {
+		    $base64aadrecon = "/9j/4AAQSkZJRgABAQAAkACQAAD/4QCeRXhpZgAATU0AKgAAAAgABQESAAMAAAABAAEAAAEaAAUAAAABAAAASgEbAAUAAAABAAAAUgEoAAMAAAABAAIAAIdpAAQAAAABAAAAWgAAAAAAAACQAAAAAQAAAJAAAAABAAOShgAHAAAAEgAAAISgAgAEAAAAAQAAAaagAwAEAAAAAQAAAD4AAAAAQVNDSUkAAABTY3JlZW5zaG90/+EJIWh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8APD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iWE1QIENvcmUgNS40LjAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIi8+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPD94cGFja2V0IGVuZD0idyI/PgD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/+IPrElDQ19QUk9GSUxFAAEBAAAPnGFwcGwCEAAAbW50clJHQiBYWVogB+QAAQAHABYAIwAjYWNzcEFQUEwAAAAAQVBQTAAAAAAAAAAAAAAAAAAAAAAAAPbWAAEAAAAA0y1hcHBsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARZGVzYwAAAVAAAABiZHNjbQAAAbQAAASCY3BydAAABjgAAAAjd3RwdAAABlwAAAAUclhZWgAABnAAAAAUZ1hZWgAABoQAAAAUYlhZWgAABpgAAAAUclRSQwAABqwAAAgMYWFyZwAADrgAAAAgdmNndAAADtgAAAAwbmRpbgAADwgAAAA+Y2hhZAAAD0gAAAAsbW1vZAAAD3QAAAAoYlRSQwAABqwAAAgMZ1RSQwAABqwAAAgMYWFiZwAADrgAAAAgYWFnZwAADrgAAAAgZGVzYwAAAAAAAAAIRGlzcGxheQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAG1sdWMAAAAAAAAAJgAAAAxockhSAAAAFAAAAdhrb0tSAAAADAAAAexuYk5PAAAAEgAAAfhpZAAAAAAAEgAAAgpodUhVAAAAFAAAAhxjc0NaAAAAFgAAAjBkYURLAAAAHAAAAkZubE5MAAAAFgAAAmJmaUZJAAAAEAAAAnhpdElUAAAAFAAAAohlc0VTAAAAEgAAApxyb1JPAAAAEgAAApxmckNBAAAAFgAAAq5hcgAAAAAAFAAAAsR1a1VBAAAAHAAAAthoZUlMAAAAFgAAAvR6aFRXAAAACgAAAwp2aVZOAAAADgAAAxRza1NLAAAAFgAAAyJ6aENOAAAACgAAAwpydVJVAAAAJAAAAzhlbkdCAAAAFAAAA1xmckZSAAAAFgAAA3BtcwAAAAAAEgAAA4ZoaUlOAAAAEgAAA5h0aFRIAAAADAAAA6pjYUVTAAAAGAAAA7ZlbkFVAAAAFAAAA1xlc1hMAAAAEgAAApxkZURFAAAAEAAAA85lblVTAAAAEgAAA95wdEJSAAAAGAAAA/BwbFBMAAAAEgAABAhlbEdSAAAAIgAABBpzdlNFAAAAEAAABDx0clRSAAAAFAAABExwdFBUAAAAFgAABGBqYUpQAAAADAAABHYATABDAEQAIAB1ACAAYgBvAGoAac7st+wAIABMAEMARABGAGEAcgBnAGUALQBMAEMARABMAEMARAAgAFcAYQByAG4AYQBTAHoA7QBuAGUAcwAgAEwAQwBEAEIAYQByAGUAdgBuAP0AIABMAEMARABMAEMARAAtAGYAYQByAHYAZQBzAGsA5gByAG0ASwBsAGUAdQByAGUAbgAtAEwAQwBEAFYA5AByAGkALQBMAEMARABMAEMARAAgAGMAbwBsAG8AcgBpAEwAQwBEACAAYwBvAGwAbwByAEEAQwBMACAAYwBvAHUAbABlAHUAciAPAEwAQwBEACAGRQZEBkgGRgYpBBoEPgQ7BEwEPgRABD4EMgQ4BDkAIABMAEMARCAPAEwAQwBEACAF5gXRBeIF1QXgBdlfaYJyAEwAQwBEAEwAQwBEACAATQDgAHUARgBhAHIAZQBiAG4A/QAgAEwAQwBEBCYEMgQ1BEIEPQQ+BDkAIAQWBBoALQQ0BDgEQQQ/BDsENQQ5AEMAbwBsAG8AdQByACAATABDAEQATABDAEQAIABjAG8AdQBsAGUAdQByAFcAYQByAG4AYQAgAEwAQwBECTAJAgkXCUAJKAAgAEwAQwBEAEwAQwBEACAOKg41AEwAQwBEACAAZQBuACAAYwBvAGwAbwByAEYAYQByAGIALQBMAEMARABDAG8AbABvAHIAIABMAEMARABMAEMARAAgAEMAbwBsAG8AcgBpAGQAbwBLAG8AbABvAHIAIABMAEMARAOIA7MDxwPBA8kDvAO3ACADvwO4A8wDvQO3ACAATABDAEQARgDkAHIAZwAtAEwAQwBEAFIAZQBuAGsAbABpACAATABDAEQATABDAEQAIABhACAAQwBvAHIAZQBzMKsw6TD8AEwAQwBEAAB0ZXh0AAAAAENvcHlyaWdodCBBcHBsZSBJbmMuLCAyMDIwAABYWVogAAAAAAAA8xYAAQAAAAEWylhZWiAAAAAAAACC9AAAPWT///+8WFlaIAAAAAAAAEwkAAC0hQAACuZYWVogAAAAAAAAJ74AAA4XAADIi2N1cnYAAAAAAAAEAAAAAAUACgAPABQAGQAeACMAKAAtADIANgA7AEAARQBKAE8AVABZAF4AYwBoAG0AcgB3AHwAgQCGAIsAkACVAJoAnwCjAKgArQCyALcAvADBAMYAywDQANUA2wDgAOUA6wDwAPYA+wEBAQcBDQETARkBHwElASsBMgE4AT4BRQFMAVIBWQFgAWcBbgF1AXwBgwGLAZIBmgGhAakBsQG5AcEByQHRAdkB4QHpAfIB+gIDAgwCFAIdAiYCLwI4AkECSwJUAl0CZwJxAnoChAKOApgCogKsArYCwQLLAtUC4ALrAvUDAAMLAxYDIQMtAzgDQwNPA1oDZgNyA34DigOWA6IDrgO6A8cD0wPgA+wD+QQGBBMEIAQtBDsESARVBGMEcQR+BIwEmgSoBLYExATTBOEE8AT+BQ0FHAUrBToFSQVYBWcFdwWGBZYFpgW1BcUF1QXlBfYGBgYWBicGNwZIBlkGagZ7BowGnQavBsAG0QbjBvUHBwcZBysHPQdPB2EHdAeGB5kHrAe/B9IH5Qf4CAsIHwgyCEYIWghuCIIIlgiqCL4I0gjnCPsJEAklCToJTwlkCXkJjwmkCboJzwnlCfsKEQonCj0KVApqCoEKmAquCsUK3ArzCwsLIgs5C1ELaQuAC5gLsAvIC+EL+QwSDCoMQwxcDHUMjgynDMAM2QzzDQ0NJg1ADVoNdA2ODakNww3eDfgOEw4uDkkOZA5/DpsOtg7SDu4PCQ8lD0EPXg96D5YPsw/PD+wQCRAmEEMQYRB+EJsQuRDXEPURExExEU8RbRGMEaoRyRHoEgcSJhJFEmQShBKjEsMS4xMDEyMTQxNjE4MTpBPFE+UUBhQnFEkUahSLFK0UzhTwFRIVNBVWFXgVmxW9FeAWAxYmFkkWbBaPFrIW1hb6Fx0XQRdlF4kXrhfSF/cYGxhAGGUYihivGNUY+hkgGUUZaxmRGbcZ3RoEGioaURp3Gp4axRrsGxQbOxtjG4obshvaHAIcKhxSHHscoxzMHPUdHh1HHXAdmR3DHeweFh5AHmoelB6+HukfEx8+H2kflB+/H+ogFSBBIGwgmCDEIPAhHCFIIXUhoSHOIfsiJyJVIoIiryLdIwojOCNmI5QjwiPwJB8kTSR8JKsk2iUJJTglaCWXJccl9yYnJlcmhya3JugnGCdJJ3onqyfcKA0oPyhxKKIo1CkGKTgpaymdKdAqAio1KmgqmyrPKwIrNitpK50r0SwFLDksbiyiLNctDC1BLXYtqy3hLhYuTC6CLrcu7i8kL1ovkS/HL/4wNTBsMKQw2zESMUoxgjG6MfIyKjJjMpsy1DMNM0YzfzO4M/E0KzRlNJ402DUTNU01hzXCNf02NzZyNq426TckN2A3nDfXOBQ4UDiMOMg5BTlCOX85vDn5OjY6dDqyOu87LTtrO6o76DwnPGU8pDzjPSI9YT2hPeA+ID5gPqA+4D8hP2E/oj/iQCNAZECmQOdBKUFqQaxB7kIwQnJCtUL3QzpDfUPARANER0SKRM5FEkVVRZpF3kYiRmdGq0bwRzVHe0fASAVIS0iRSNdJHUljSalJ8Eo3Sn1KxEsMS1NLmkviTCpMcky6TQJNSk2TTdxOJU5uTrdPAE9JT5NP3VAnUHFQu1EGUVBRm1HmUjFSfFLHUxNTX1OqU/ZUQlSPVNtVKFV1VcJWD1ZcVqlW91dEV5JX4FgvWH1Yy1kaWWlZuFoHWlZaplr1W0VblVvlXDVchlzWXSddeF3JXhpebF69Xw9fYV+zYAVgV2CqYPxhT2GiYfViSWKcYvBjQ2OXY+tkQGSUZOllPWWSZedmPWaSZuhnPWeTZ+loP2iWaOxpQ2maafFqSGqfavdrT2una/9sV2yvbQhtYG25bhJua27Ebx5veG/RcCtwhnDgcTpxlXHwcktypnMBc11zuHQUdHB0zHUodYV14XY+dpt2+HdWd7N4EXhueMx5KnmJeed6RnqlewR7Y3vCfCF8gXzhfUF9oX4BfmJ+wn8jf4R/5YBHgKiBCoFrgc2CMIKSgvSDV4O6hB2EgITjhUeFq4YOhnKG14c7h5+IBIhpiM6JM4mZif6KZIrKizCLlov8jGOMyo0xjZiN/45mjs6PNo+ekAaQbpDWkT+RqJIRknqS45NNk7aUIJSKlPSVX5XJljSWn5cKl3WX4JhMmLiZJJmQmfyaaJrVm0Kbr5wcnImc951kndKeQJ6unx2fi5/6oGmg2KFHobaiJqKWowajdqPmpFakx6U4pammGqaLpv2nbqfgqFKoxKk3qamqHKqPqwKrdavprFys0K1ErbiuLa6hrxavi7AAsHWw6rFgsdayS7LCszizrrQltJy1E7WKtgG2ebbwt2i34LhZuNG5SrnCuju6tbsuu6e8IbybvRW9j74KvoS+/796v/XAcMDswWfB48JfwtvDWMPUxFHEzsVLxcjGRsbDx0HHv8g9yLzJOsm5yjjKt8s2y7bMNcy1zTXNtc42zrbPN8+40DnQutE80b7SP9LB00TTxtRJ1MvVTtXR1lXW2Ndc1+DYZNjo2WzZ8dp22vvbgNwF3IrdEN2W3hzeot8p36/gNuC94UThzOJT4tvjY+Pr5HPk/OWE5g3mlucf56noMui86Ubp0Opb6uXrcOv77IbtEe2c7ijutO9A78zwWPDl8XLx//KM8xnzp/Q09ML1UPXe9m32+/eK+Bn4qPk4+cf6V/rn+3f8B/yY/Sn9uv5L/tz/bf//cGFyYQAAAAAAAwAAAAJmZgAA8qcAAA1ZAAAT0AAAClt2Y2d0AAAAAAAAAAEAAQAAAAAAAAABAAAAAQAAAAAAAAABAAAAAQAAAAAAAAABAABuZGluAAAAAAAAADYAAK4AAABSAAAAQ8AAALDAAAAmgAAADUAAAFAAAABUQAACMzMAAjMzAAIzMwAAAAAAAAAAc2YzMgAAAAAAAQxyAAAF+P//8x0AAAe6AAD9cv//+53///2kAAAD2QAAwHFtbW9kAAAAAAAABhAAAKBAAAAAANUYZIAAAAAAAAAAAAAAAAAAAAAA/8AAEQgAPgGmAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/bAEMAHBwcHBwcMBwcMEQwMDBEXERERERcdFxcXFxcdIx0dHR0dHSMjIyMjIyMjKioqKioqMTExMTE3Nzc3Nzc3Nzc3P/bAEMBIiQkODQ4YDQ0YOacgJzm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5v/dAAQAG//aAAwDAQACEQMRAD8Aw6KKK3Mgoqza2zXUojBwO5qzeae1qocNvHfjGP1pN2BK5m0UUUwCiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKcql22r1NADaK2ZdIaOMur7iO2Mf1rGpJpjsFFKBk4rc/sX/AKa/+O//AF6bdhIwqK3f7F/6a/8Ajv8A9eqVxp08ALY3KO/A/rS5kPlZn0UVpWmn/a0L79uPbP8AWmIzaK3v7F/6a/8Ajv8A9eoZdIlQZjbefTGP60uZD5WY9FKQVOD1pKYgooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigD/9DDoop6KXYKOprcyN3TEEMDXDfxY/QkVaB+3WXPVv6H8PSq2ossFstunQ5/mDUOkTEM0J74x+pqGua7KT5bGKRjg1LB5Xmjz/ud+vp7Va1GHybg46Hp+QrPqk7q4pKzsb3/ABJP876P+JJ/nfWDW7p1kMfaJfw/UdjSatq2F+hcewsFQvs4+rf41y5xnitK/vjcN5cf3B+vT2rMoinuxy7G+1lbCz80J83rk+uPWsCupf8A5B/+f71ctQt2H2UbGmWsFwH85d2MY5I9fSs65RY5mRBgDH8q2NG6Sfh/Wsm8/wCPhvw/lQ/iEvhG2yLJMqOMg5/lWxdabGXRLdduc5Oc9PqayrP/AI+F/H+Vb2p3LwRhY+C3f0xiiT2sOPUqmDS7f93cHLf8C/pUV/a28UQkgGM/X29axq0Li+8+ERbMY75z3z6UNME0UACxwK3YtNhhTzLs/hzx+RqDSYg8xkP8H9QasahbXlxL+7XKDpyPQUSfQUVfUfHBpM52QjLf8C/rWXe2ZtGHOVPT9KcNOvlORH+o/wAa29RXdaMW6jH8xSemqZS10scpWppUPmT+Yeif1BrLro7cC0sDKfvHr+dVJ2VyEruxcguRPLJH2XGPxFcxcxGCZoz2x/KpbGcw3AYnjnP5GtHV4ekw98/oKm3K0Xe90YifeFdHqv8Ax7f59RXOJ94V0eq/8e3+fUU59BR3ZzasynK10Om3rzExSnJ7fqewrnKvaexW7T8f5GqauTtqP1G3EE2V6N0/ACtPSP8AUn/Pc1FrIGIz9f6VLpH+pP8AnuazXwsuXxIwJv8AWGtnSZpGZo2ORx/Wqj6beNITs49cj/GtS3gi06IyStyepx/+v1qrqwmnfQy9UVRckjv/AICs0AscCp7mc3ExlIxnt+FX9JiDzGQ/wf1Bpx0WopO70J4tNhhTzLs/hzx+RqSODSZzshGW/wCBf1pmoW15cS/u1yg6cj0FUBp18pyI/wBR/jUrXdjatsNvbM2jDnKnp+lUa6vUV3WjFuox/MVzMKeZKE9acHfQJaal+z017geY52r275/WrrxaRCdsvX/gVWNRmNvBtTgn/EVy1JO4Wsb/ANn02YfuOv8AwL+tYJGDSVJGu9wvrVJCb0NGy01px5shwvb36+9W2j0eM7H6j/eqzqD+Ra7U4z/iK5apTux2sjfm0uORPMtT+Hr+ZrBIKnB61saRKRIYuzf0zUOqRhLjcP4v6AU9nYN1csadaW88RaVcn6kevpTYdOTBmnO1B26+3Y1c0j/Un/Pc1kX1y9xLzwB0H5UnfmsgXw6mpFDpM52RDJ/4F/Wsu+tPsrjByp6fpVe3YpKrDtn+Vb2rgeSp+v8AMUPSwLW6OboooqyT/9HDrV0qESTGQ9E/qDWVXRw/6HYb24b/AOvW0nZGSV3YfcS6XK/785Yf739Kijk0eJxJGcMOh+aufpKSiU5HS6pEJbfzV/h/qQK5qun05xNa+W38PX8Sax4LUNdiCT8fyzRHRtA3dJljTrLzj50n3B09+o9afqV7vPkRH5R19+h9K2Z4Wli8uNtn4ZrK/sX/AKa/+O//AF6m93qNK2xg0Vvf2L/01/8AHf8A69YRGDirTTJszqH/AOQf/n+9XLV0tjPHcQeQ5+YdR+JNQ/2VDE2+WTK+mD/Q1N7N3HvFWH6OjLGzkcNjH4ZrGvP+Phvw/lXSWdys5ZYxhVxj8a5u8/4+G/D+VH2g+yLZ/wDHwv4/yrV1npH+P9KyrP8A4+F/H+Vaus9I/wAf6U5boI9TAoooqiTb0ZgGdfXH9adf3d5bzlUfCnpwPQVkQTNBIJF6iui8201FNjfeHbnj+XpUyWtyovoY39p3v/PT9B/hTJL+6lQxyPlT2wP8K0joozxLj/gP/wBeo57Szt4jubc/bgjvSugszMt4vOmWP1z/ACrpbqSxUeTcnj05+vaqGkxbQ07dOMfqKybmXzpmk9cfypvV2BaK5r/8ST/O+tJ/KvLciM5U/X1rj629Hlw7RH+LGPwzScdAUrMx1GHwa6PVf+Pb/PqKzdQhMV1u7N0/ACty6tvtUXl7tvvjNEndJjSs2jj609LjL3IfsvX8Qauro6KcvJuH0x/WpXurWyj8uDr6c/1z603LsTy9ylq8gaVYx1XOfxxVzSP9Sf8APc1zzu0jF3OSa6HSP9Sf89zStaI27yRRGp3Mc3ztuUdsAdvpWndW6X0Iki69j+P4elc3N/rDV7TrzyH8tz8h/TrRy3WgN2bM0gqcHrW1ozAM6+uP61Nqdn5n+kR9e/v0HrWJBM0EgkXqKad0KSsa9/d3lvOVR8KenA9BVH+073/np+g/wrZ8201FNjfeHbnj+XpVU6KM8S4/4D/9epVloynrqjNkv7qVDHI+VPbA/wAKjtmCTqx7Z/lWlPaWdvEdzbn7cEd6xauLXQmSdtTptWjLQBx/D/UiuZrobTUY3Tyrjg+vr37ClfSYZDuhfYPoT/M1K93RlPU52pYW2yhjW0NLgh+ad9w+hH8jWG+3cdvSqUlclxdjpNVUtb7h2/xFcxXQ2d9FLH5Fxwfx579hSNo6OdySbR6Yz/WpXu6Mp6oq6ShM+8dF/qDRqzAzhfT/AAFaPmWunRlV5Y9uef5+tc5LI0shkbqaN3cWyOg0j/Un/Pc1gTf6w1v6R/qT/nuawJv9Yaf2gXwiRf6wV0Or/wCpH+e4rnov9YK6HV/9SP8APcUT6BDdnNUUUVRJ/9LDooorcyCiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//Z"
+        }
 
         $bytes = [System.Convert]::FromBase64String($base64aadrecon)
         Remove-Variable base64aadrecon
@@ -2272,6 +2350,7 @@ Function Export-ADRExcel
         Remove-Variable -Name workbook -Scope Global
         Get-ADRExcelComObjRelease -ComObjtoRelease $excel -Final $true
         Remove-Variable -Name excel -Scope Global
+        Remove-Variable Method
     }
 }
 
@@ -2286,7 +2365,7 @@ Function Get-AADRTenant
 
 .PARAMETER Method
     [string]
-    Which method to use; AzureAD.
+    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts)
 
 .PARAMETER Threads
     [int]
@@ -2309,6 +2388,75 @@ Function Get-AADRTenant
         If ($AADRTenant)
         {
             $AADRTenantObj = [AADRecon.AzureADClass]::TenantParser($AADRTenant, $Threads)
+            Remove-Variable AADRTenant
+        }
+    }
+
+    If ($Method -eq 'MSGraph')
+    {
+        $AADRTenant = @( Get-MgOrganization -All )
+        If ($AADRTenant)
+        {
+            $AADRTenantObj = @()
+            $AADRTenant | ForEach-Object {
+
+                $ObjValues = @("DisplayName", [string] $_.DisplayName, "Creation Date", [datetime] $_.CreatedDateTime)
+
+                For ($i = 0; $i -lt $($ObjValues.Count); $i++)
+                {
+                    $Obj = New-Object PSObject
+                    $Obj | Add-Member -MemberType NoteProperty -Name "Category" -Value $ObjValues[$i]
+                    $Obj | Add-Member -MemberType NoteProperty -Name "Value" -Value $ObjValues[$i + 1]
+                    $i++
+                    $AADRTenantObj += $Obj
+                }
+
+                For ($i = 0; $i -lt $_.VerifiedDomains.Count; $i++)
+                {
+                    $ObjValues = @("VerifiedDomain($i) - Name", [string] $_.VerifiedDomains[$i].Name, "VerifiedDomain($i) - Type", $_.VerifiedDomains[$i].Type, "VerifiedDomain($i) - Capabilities", [string] $_.VerifiedDomains[$i].Capabilities, "VerifiedDomain($i) - _Default", [bool] $_.VerifiedDomains[$i].IsDefault, "VerifiedDomain($i) - Initial", [bool] $_.VerifiedDomains[$i].IsInitial)
+
+                    For ($icnt = 0; $icnt -lt $($ObjValues.Count); $icnt++)
+                    {
+                        $Obj = New-Object PSObject
+                        $Obj | Add-Member -MemberType NoteProperty -Name "Category" -Value $ObjValues[$icnt]
+                        $Obj | Add-Member -MemberType NoteProperty -Name "Value" -Value $ObjValues[$icnt + 1]
+                        $icnt++
+                        $AADRTenantObj += $Obj
+                    }
+                }
+
+                For ($i = 0; $i -lt $_.TechnicalNotificationMails.Count; $i++)
+                {
+                    $TechnicalNotificationMails = $TechnicalNotificationMails + "," + $_.TechnicalNotificationMails[$i];
+                }
+                $TechnicalNotificationMails = $TechnicalNotificationMails.TrimStart(',');
+
+                $ObjValues = @("OnPremisesSyncEnabled", [string] $_.OnPremisesSyncEnabled, "OnPremisesLastSyncDateTime", [string] $_.OnPremisesLastSyncDateTime, "Street", [string] $_.Street, "City", [string] $_.City, "PostalCode", [string] $_.PostalCode, "State", [string] $_.State, "Country", [string] $_.Country, "CountryLetterCode", [string] $_.CountryLetterCode, "TelephoneNumber", [string] $_.TelephoneNumber, "TechnicalNotificationMails", $TechnicalNotificationMails)
+
+                For ($i = 0; $i -lt $($ObjValues.Count); $i++)
+                {
+                    $Obj = New-Object PSObject
+                    $Obj | Add-Member -MemberType NoteProperty -Name "Category" -Value $ObjValues[$i]
+                    $Obj | Add-Member -MemberType NoteProperty -Name "Value" -Value $ObjValues[$i + 1]
+                    $i++
+                    $AADRTenantObj += $Obj
+                }
+
+                For ($i = 0; $i -lt $_.AssignedPlans.Count; $i++) {
+
+                    $ObjValues = @("AssignedPlan($i) - AssignedTimestamp", [datetime] $_.AssignedPlans[$i].AssignedDateTime, "AssignedPlan($i) - CapabilityStatus", [string] $_.AssignedPlans[$i].CapabilityStatus, "AssignedPlan($i) - Service", [string] $_.AssignedPlans[$i].Service, "AssignedPlan($i) - ServicePlanId", [bool] $_.AssignedPlans[$i].ServicePlanId)
+
+                    For ($icnt = 0; $icnt -lt $($ObjValues.Count); $icnt++)
+                    {
+                        $Obj = New-Object PSObject
+                        $Obj | Add-Member -MemberType NoteProperty -Name "Category" -Value $ObjValues[$icnt]
+                        $Obj | Add-Member -MemberType NoteProperty -Name "Value" -Value $ObjValues[$icnt + 1]
+                        $icnt++
+                        $AADRTenantObj += $Obj
+                    }
+                }
+            }
+            Remove-Variable AADRTenant
         }
     }
 
@@ -2427,11 +2575,23 @@ Function Get-AADRUser
 
 .PARAMETER Method
     [string]
-    Which method to use; AzureAD.
+    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts)
 
 .PARAMETER date
     [DateTime]
     Date when AzureADRecon was executed.
+
+.PARAMETER DormantTimeSpan
+    [int]
+    Timespan for Dormant accounts. Default 30 days.
+
+.PARAMETER PassMaxAge
+    [int]
+    Timespan for Password age. Default 90 days.
+
+.PARAMETER PageSize
+    [int]
+    The PageSize to set for the MSGraph query. Default 200.
 
 .PARAMETER Threads
     [int]
@@ -2447,6 +2607,15 @@ Function Get-AADRUser
         [Parameter(Mandatory = $true)]
         [DateTime] $date,
 
+        [Parameter(Mandatory = $true)]
+        [int] $DormantTimeSpan = 30,
+
+        [Parameter(Mandatory = $true)]
+        [int] $PassMaxAge = 90,
+
+        [Parameter(Mandatory = $true)]
+        [int] $PageSize = 200,
+
         [Parameter(Mandatory = $false)]
         [int] $Threads = 10
     )
@@ -2459,6 +2628,168 @@ Function Get-AADRUser
         {
             Write-Verbose "[*] Total Users: $([AADRecon.AzureADClass]::ObjectCount($AzureADUsers))"
             $UserObj = [AADRecon.AzureADClass]::UserParser($AzureADUsers, $AzureADLicenses, $Threads)
+            Remove-Variable AzureADUsers
+            Remove-Variable AzureADLicenses
+        }
+    }
+
+    If ($Method -eq 'MSGraph')
+    {
+        $AzureADUsers = @( Get-MgUser -All -Property accountEnabled, assignedLicenses, createdDateTime, department, displayName, jobTitle, mobilePhone, telephone, userPrincipalName, userType, signInActivity, createdDateTime, lastPasswordChangeDateTime -PageSize $Pagesize)
+        If($AzureADUsers)
+        {
+            $ProcessedUserCount = 0
+            Write-Verbose "[*] Total Users: $($AzureADUsers.Count)"
+            # Subnets Info
+            $UserObj = @()
+            $AzureADUsers | ForEach-Object {
+                $ProcessedUserCount++
+                # Create the object for each instance.
+                $Obj = New-Object PSObject
+                $Obj | Add-Member -MemberType NoteProperty -Name "UserPrincipalName" -Value $([string] $_.UserPrincipalName)
+                $Obj | Add-Member -MemberType NoteProperty -Name "DisplayName" -Value $([string] $_.DisplayName)
+                $Obj | Add-Member -MemberType NoteProperty -Name "Enabled" -Value $([bool] $_.accountEnabled)
+                $Obj | Add-Member -MemberType NoteProperty -Name "UserType" -Value $([string] $_.userType)
+                $Obj | Add-Member -MemberType NoteProperty -Name "JobTitle" -Value $([string] $_.JobTitle)
+                $Obj | Add-Member -MemberType NoteProperty -Name "Department" -Value $([string] $_.Department)
+                $Obj | Add-Member -MemberType NoteProperty -Name "Mobile" -Value $([string] $_.MobilePhone)
+
+                If ([string]::IsNullOrEmpty($_.signInActivity.lastSignInRequestId))
+                {
+                    $NeverLoggedIn = $True
+                    $DaysSinceLastLogon = $null
+                }
+                Else
+                {
+                    $NeverLoggedIn = $False
+                    $DaysSinceLastLogon = [Math]::Abs(($Date - [DateTime]$_.signInActivity.lastSignInDateTime).Days)
+                }
+
+                $Obj | Add-Member -MemberType NoteProperty -Name "Never Logged In" -Value $NeverLoggedIn
+                $Obj | Add-Member -MemberType NoteProperty -Name "Logon Age (days)" -Value $DaysSinceLastLogon
+
+                If ([string]::IsNullOrEmpty($_.signInActivity.lastNonInteractiveSignInRequestId))
+                {
+                    $NeverNonInteractiveLoggedIn = $True
+                    $DaysSinceLastNonInteractiveLogon = $null
+                }
+                Else
+                {
+                    $NeverNonInteractiveLoggedIn = $False
+                    $DaysSinceLastNonInteractiveLogon = [Math]::Abs(($Date - [DateTime]$_.signInActivity.lastNonInteractiveSignInDateTime).Days)
+                }
+
+                $Obj | Add-Member -MemberType NoteProperty -Name $("Dormant (> " + $DormantTimeSpan + " days)") -Value $(If ($DaysSinceLastLogon -gt $DormantTimeSpan) { $True } Else { $False })
+                $Obj | Add-Member -MemberType NoteProperty -Name "Never Non-Interactive Logged In" -Value $NeverNonInteractiveLoggedIn
+                $Obj | Add-Member -MemberType NoteProperty -Name "Non-Interactive Logon Age (days)" -Value $DaysSinceLastNonInteractiveLogon
+                $Obj | Add-Member -MemberType NoteProperty -Name "Password Age (days)" -Value $([Math]::Abs(($Date - [DateTime]$_.lastPasswordChangeDateTime).Days))
+                $Obj | Add-Member -MemberType NoteProperty -Name $("Password Age (>" + $PassMaxAge + " days)") -Value $(If (([Math]::Abs(($Date - [DateTime]$_.lastPasswordChangeDateTime).Days)) -gt $PassMaxAge) { $True } Else { $False })
+                $Obj | Add-Member -MemberType NoteProperty -Name "LastSignInDateTime" -Value $(If ($_.signInActivity.lastSignInDateTime -ne $null) { [DateTime]$_.signInActivity.lastSignInDateTime } Else { $null })
+                $Obj | Add-Member -MemberType NoteProperty -Name "LastNonInteractiveSignInDateTime" -Value $(If ($_.signInActivity.lastNonInteractiveSignInDateTime -ne $null) { [DateTime]$_.signInActivity.lastNonInteractiveSignInDateTime } Else { $null })
+                $Obj | Add-Member -MemberType NoteProperty -Name "lastPasswordChangeDateTime" -Value $(If ($_.lastPasswordChangeDateTime -ne $null) { [DateTime]$_.lastPasswordChangeDateTime } Else { $null })
+
+                # GetMFAStatusReport.ps1 https://o365reports.com/2022/04/27/get-mfa-status-of-office-365-users-using-microsoft-graph-powershell
+
+                $Is3rdPartyAuthenticatorUsed = "False"
+                $MFAPhone = "-"
+                $MicrosoftAuthenticatorDevice = "-"
+                Write-Progress -Activity "`n Processed users count: $ProcessedUserCount Currently processing user: $($_.DisplayName)`n"
+                [array]$MFAData = Get-MgUserAuthenticationMethod -UserId $_.UserPrincipalName
+                $AuthenticationMethod = @()
+                $AdditionalDetails = @()
+
+                foreach ($MFA in $MFAData)
+                {
+                    Switch ($MFA.AdditionalProperties["@odata.type"])
+                    {
+                        "#microsoft.graph.passwordAuthenticationMethod" {
+                            $AuthMethod = 'PasswordAuthentication'
+                            $AuthMethodDetails = $MFA.AdditionalProperties["displayName"]
+                        }
+                        "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" {
+                            # Microsoft Authenticator App
+                            $AuthMethod = 'AuthenticatorApp'
+                            $AuthMethodDetails = $MFA.AdditionalProperties["displayName"]
+                            $MicrosoftAuthenticatorDevice = $MFA.AdditionalProperties["displayName"]
+                        }
+                        "#microsoft.graph.phoneAuthenticationMethod" {
+                            # Phone authentication
+                            $AuthMethod = 'PhoneAuthentication'
+                            $AuthMethodDetails = $MFA.AdditionalProperties["phoneType", "phoneNumber"] -join ' '
+                            $MFAPhone = $MFA.AdditionalProperties["phoneNumber"]
+                        }
+                        "#microsoft.graph.fido2AuthenticationMethod" {
+                            # FIDO2 key
+                            $AuthMethod = 'Fido2'
+                            $AuthMethodDetails = $MFA.AdditionalProperties["model"]
+                        }
+                        "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod" {
+                            # Windows Hello
+                            $AuthMethod = 'WindowsHelloForBusiness'
+                            $AuthMethodDetails = $MFA.AdditionalProperties["displayName"]
+                        }
+                        "#microsoft.graph.emailAuthenticationMethod" {
+                            # Email Authentication
+                            $AuthMethod = 'EmailAuthentication'
+                            $AuthMethodDetails = $MFA.AdditionalProperties["emailAddress"]
+                        }
+                        "microsoft.graph.temporaryAccessPassAuthenticationMethod" {
+                            # Temporary Access pass
+                            $AuthMethod = 'TemporaryAccessPass'
+                            $AuthMethodDetails = 'Access pass lifetime (minutes): ' + $MFA.AdditionalProperties["lifetimeInMinutes"]
+                        }
+                        "#microsoft.graph.passwordlessMicrosoftAuthenticatorAuthenticationMethod" {
+                            # Passwordless
+                            $AuthMethod = 'PasswordlessMSAuthenticator'
+                            $AuthMethodDetails = $MFA.AdditionalProperties["displayName"]
+                        }
+                        "#microsoft.graph.softwareOathAuthenticationMethod" {
+                            $AuthMethod = 'SoftwareOath'
+                            $Is3rdPartyAuthenticatorUsed = "True"
+                        }
+
+                    }
+                    $AuthenticationMethod += $AuthMethod
+                    If ($AuthMethodDetails -ne $null)
+                    {
+                        $AdditionalDetails += "$AuthMethod : $AuthMethodDetails"
+                    }
+                }
+
+                #To remove duplicate authentication methods
+                $AuthenticationMethod =$AuthenticationMethod | Sort-Object | Get-Unique
+                $AuthenticationMethods= $AuthenticationMethod  -join ","
+                $AdditionalDetail=$AdditionalDetails -join ", "
+                #Determine MFA status
+                [array]$StrongMFAMethods=("Fido2","PhoneAuthentication","PasswordlessMSAuthenticator","AuthenticatorApp","WindowsHelloForBusiness")
+                $MFAStatus="Disabled"
+
+                ForEach($StrongMFAMethod in $StrongMFAMethods)
+                {
+                    If ($AuthenticationMethod -contains $StrongMFAMethod)
+                    {
+                        $MFAStatus="Strong"
+                        break
+                    }
+                }
+
+                If (($MFAStatus -ne "Strong") -and ($AuthenticationMethod -contains "SoftwareOath"))
+                {
+                    $MFAStatus="Weak"
+                }
+
+                $Obj | Add-Member -MemberType NoteProperty -Name "MFAStatus" -Value $MFAStatus
+                $Obj | Add-Member -MemberType NoteProperty -Name "AuthenticationMethods" -Value $AuthenticationMethods
+                $Obj | Add-Member -MemberType NoteProperty -Name "MFA Phone" -Value $MFAPhone
+                $Obj | Add-Member -MemberType NoteProperty -Name "Microsoft Authenticator Configured Device" -Value $MicrosoftAuthenticatorDevice
+                $Obj | Add-Member -MemberType NoteProperty -Name "Is 3rd-Party Authenticator Used" -Value $Is3rdPartyAuthenticatorUsed
+                $Obj | Add-Member -MemberType NoteProperty -Name "Additional Details" -Value $AdditionalDetail
+                $Obj | Add-Member -MemberType NoteProperty -Name "whenCreated" -Value $([DateTime] $([DateTime]($_.createdDateTime)))
+                $Obj | Add-Member -MemberType NoteProperty -Name "Assigned Licenses (Count)" -Value $($_.assignedLicenses.Count)
+                $UserObj += $Obj
+            }
+            Write-Progress -Activity "Processed users" -Completed
+            Remove-Variable AzureADUsers
         }
     }
 
@@ -2930,11 +3261,19 @@ Function Get-AADRAbout
 
     $AboutAzureADRecon = @()
 
-    $Version = $Method + " Version"
+    $Version = $Method
 
     If ($Credential -ne [Management.Automation.PSCredential]::Empty)
     {
         $Username = $($Credential.UserName)
+    }
+    ElseIf ($Method -eq "AzureAD" -and (-Not ([string]::IsNullOrEmpty((Get-AzureADCurrentSessionInfo).Account.Id)) ) )
+    {
+        $Username = (Get-AzureADCurrentSessionInfo).Account.Id
+    }
+    ElseIf ($Method -eq "MSGraph" -and (-Not ([string]::IsNullOrEmpty((Get-MgContext).Account)) ) )
+    {
+        $Username = (Get-MgContext).Account
     }
     Else
     {
@@ -2965,7 +3304,7 @@ Function Invoke-AzureADRecon
 
 .PARAMETER Method
     [string]
-    Which method to use; AzureAD.
+    Which method to use; AzureAD, MSGraph.
 
 .PARAMETER Collect
     [array]
@@ -2979,9 +3318,25 @@ Function Invoke-AzureADRecon
     [string]
 	Path for AzureADRecon output folder to save the CSV files and the AzureADRecon-Report.xlsx.
 
+.PARAMETER DormantTimeSpan
+    [int]
+    Timespan for Dormant accounts. Default 30 days.
+
+.PARAMETER PassMaxAge
+    [int]
+    Timespan for Password age. Default 90 days
+
+.PARAMETER PageSize
+    [int]
+    The PageSize to set for the MSGraph query. Default 200.
+
 .PARAMETER Threads
     [int]
     The number of threads to use during processing of objects. Default 10.
+
+.PARAMETER Logo
+    [string]
+    Which Logo to use in the excel file? AzureADRecon (default), Payatu.
 
 .OUTPUTS
     STDOUT, CSV, XML, JSON, HTML and/or Excel file is created in the folder specified with the information.
@@ -2991,7 +3346,7 @@ Function Invoke-AzureADRecon
         [string] $GenExcel,
 
         [Parameter(Mandatory = $false)]
-        [ValidateSet('AzureAD')]
+        [ValidateSet('AzureAD', 'MSGraph')]
         [string] $Method = 'AzureAD',
 
         [Parameter(Mandatory = $true)]
@@ -3007,20 +3362,32 @@ Function Invoke-AzureADRecon
         [string] $AADROutputDir,
 
         [Parameter(Mandatory = $false)]
-        [int] $Threads = 10
+        [int] $DormantTimeSpan = 30,
+
+        [Parameter(Mandatory = $false)]
+        [int] $PassMaxAge = 90,
+
+        [Parameter(Mandatory = $false)]
+        [int] $PageSize = 200,
+
+        [Parameter(Mandatory = $false)]
+        [int] $Threads = 10,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('AzureADRecon', 'Payatu')]
+        [string] $Logo = "AzureADRecon"
     )
+
+    [string] $AzureADReconVersion = "v0.02"
+    Write-Output "[*] AzureADRecon $AzureADReconVersion by Prashant Mahajan (@prashant3535)"
 
     If ($PSVersionTable.PSEdition -eq "Core")
     {
         If ($PSVersionTable.Platform -ne "Win32NT")
         {
-            Write-Warning "[Invoke-AzureADRecon] Currently not supported ... Exiting"
-            #Return $null
+            $Method = "MSGraph"
         }
     }
-
-    [string] $AzureADReconVersion = "v0.02"
-    Write-Output "[*] AzureADRecon $AzureADReconVersion by Prashant Mahajan (@prashant3535)"
 
     If ($GenExcel)
     {
@@ -3029,14 +3396,17 @@ Function Invoke-AzureADRecon
             Write-Output "[Invoke-AzureADRecon] Invalid Path ... Exiting"
             Return $null
         }
-        Export-ADRExcel -ExcelPath $GenExcel
+        Export-ADRExcel -ExcelPath $GenExcel -Logo $Logo
         Return $null
     }
 
     # Import AzureAD module
-    If ($Method -eq 'AzureAD') {
-        If (Get-Module -ListAvailable -Name AzureAD) {
-            Try {
+    If ($Method -eq 'AzureAD')
+    {
+        If (Get-Module -ListAvailable -Name AzureAD)
+        {
+            Try
+            {
                 # Suppress verbose output on module import
                 $SaveVerbosePreference = $script:VerbosePreference;
                 $script:VerbosePreference = 'SilentlyContinue';
@@ -3072,6 +3442,43 @@ Function Invoke-AzureADRecon
         Else
         {
             Write-Warning "[Invoke-AzureADRecon] AzureAD Module is not installed. Run `Install-Module -Name AzureAD` to continue"
+            Return $null
+        }
+    }
+    # Import MSGraph module
+    If ($Method -eq 'MSGraph')
+    {
+        If (Get-Module -ListAvailable -Name Microsoft.Graph)
+        {
+            Try
+            {
+                # Suppress verbose output on module import
+                $SaveVerbosePreference = $script:VerbosePreference;
+                $script:VerbosePreference = 'SilentlyContinue';
+                Import-Module Microsoft.Graph -WarningAction Stop -ErrorAction Stop | Out-Null
+                Select-MgProfile -Name Beta
+                If ($SaveVerbosePreference)
+                {
+                    $script:VerbosePreference = $SaveVerbosePreference
+                    Remove-Variable SaveVerbosePreference
+                }
+            }
+            Catch
+            {
+                Write-Warning "[Invoke-AzureADRecon] Error importing Microsoft.Graph Module. Exiting"
+                If ($SaveVerbosePreference)
+                {
+                    $script:VerbosePreference = $SaveVerbosePreference
+                    Remove-Variable SaveVerbosePreference
+                }
+                Write-Verbose "[EXCEPTION] $($_.Exception.Message)"
+                Return $null
+            }
+        }
+        Else
+        {
+            Write-Warning "[Invoke-AzureADRecon] Microsoft.Graph Module is not installed. Run `Install-Module -Name Microsoft.Graph` to continue"
+            Return $null
         }
     }
 
@@ -3366,7 +3773,7 @@ Function Invoke-AzureADRecon
             {
                 If ($TenantID)
                 {
-                    Connect-AzureAD  -TenantID $TenantID | Out-Null
+                    Connect-AzureAD -TenantID $TenantID | Out-Null
                 }
                 Else
                 {
@@ -3394,7 +3801,114 @@ Function Invoke-AzureADRecon
         }
     }
 
-    Write-Debug "AzureAD Logged In"
+    If ($Method -eq 'MSGraph')
+    {
+        Try
+        {
+            Write-Output "[Invoke-AzureADRecon] MSGraph Module is installed. Logging in ..."
+
+            $Scopes = "AuditLog.Read.All, User.Read.All, UserAuthenticationMethod.Read.All"
+
+            $ADFileName = -join ($returndir, '\', 'MSGraph-Credentials.csv')
+            If (Test-Path $ADFileName) {
+                $CredsObj = Import-CSV -Path $ADFileName
+                Remove-Variable ADFileName
+                If (-Not ([string]::IsNullOrEmpty($CredsObj[0].Value)) )
+                {
+                    $TenantID = $CredsObj[0].Value
+                }
+                If (-Not ([string]::IsNullOrEmpty($CredsObj[1].Value)) ) {
+                    $ClientID = $CredsObj[1].Value
+                }
+                If (-Not ([string]::IsNullOrEmpty($CredsObj[2].Value)) )
+                {
+                    $ClientSecret = $CredsObj[2].Value
+                    $AccessToken = $true
+                }
+                If (-Not ([string]::IsNullOrEmpty($CredsObj[3].Value)) )
+                {
+                    $CertificateThumbprint = $CredsObj[3].Value
+                    $CertThumbprint = $true
+                }
+                If (-Not ([string]::IsNullOrEmpty($CredsObj[4].Value)) ) {
+                    $CertificateName = $CredsObj[4].Value
+                    $CertName = $true
+                }
+                If (-Not ([string]::IsNullOrEmpty($CredsObj[5].Value)) ) {
+                    $Certificate = Get-ChildItem Cert:\LocalMachine\My\$CredsObj[5].Value
+                    $CertAuth = $true
+                }
+                Remove-Variable CredsObj
+            }
+
+            If ($AccessToken)
+            {
+                $body = @{
+                    Grant_Type    = "client_credentials"
+                    Scope         = "https://graph.microsoft.com/.default"
+                    Client_Id     = $ClientID
+                    Client_Secret = $ClientSecret
+                }
+
+                $connection = Invoke-RestMethod `
+                    -Uri https://login.microsoftonline.com/$TenantID/oauth2/v2.0/token `
+                    -Method POST `
+                    -Body $body
+
+                Connect-MgGraph -AccessToken $($connection.access_token) -Scopes $Scopes | Out-Null
+                Remove-Variable ClientID
+                Remove-Variable ClientSecret
+                Remove-Variable TenantID
+                Remove-Variable AccessToken
+            }
+            ElseIf ($CertThumbprint)
+            {
+                Connect-MgGraph -ClientId $ClientID -TenantId $TenantID -CertificateThumbprint $CertificateThumbprint -Scopes $Scopes | Out-Null
+                Remove-Variable ClientID
+                Remove-Variable CertificateThumbprint
+                Remove-Variable TenantID
+                Remove-Variable CertThumbprint
+            }
+            ElseIf ($CertName)
+            {
+                Connect-MgGraph -ClientId $ClientID -TenantId $TenantID -CertificateName $CertificateName -Scopes $Scopes | Out-Null
+                Remove-Variable ClientID
+                Remove-Variable CertificateName
+                Remove-Variable TenantID
+                Remove-Variable CertName
+            }
+            ElseIf ($CertAuth) {
+                Connect-MgGraph -ClientId $ClientID -TenantId $TenantID -Certificate $Certificate -Scopes $Scopes | Out-Null
+                Remove-Variable ClientID
+                Remove-Variable Certificate
+                Remove-Variable TenantID
+                Remove-Variable CertAuth
+            }
+            ElseIf ($TenantID)
+            {
+                Connect-MgGraph -TenantID $TenantID -Scopes $Scopes | Out-Null
+            }
+            Else
+            {
+                Connect-MgGraph -Scopes $Scopes | Out-Null
+            }
+            Remove-Variable Scopes
+
+            If (-Not (Get-MgContext))
+            {
+                Write-Warning "[Invoke-AzureADRecon] Error authenticating to AzureAD ... Exiting"
+                Return $null
+            }
+
+        }
+        Catch
+        {
+            Write-Warning "[Invoke-AzureADRecon] Error authenticating to AzureAD ... Exiting"
+            Write-Verbose "[EXCEPTION] $($_.Exception.Message)"
+            Remove-EmptyAADROutputDir $AADROutputDir $OutputType
+            Return $null
+        }
+    }
 
     Write-Output "[*] Commencing - $date"
     If ($AADRTenant)
@@ -3433,7 +3947,7 @@ Function Invoke-AzureADRecon
     If ($AADRUsers)
     {
         Write-Output "[-] Users - May take some time"
-        $AADRObject = Get-AADRUser -Method $Method -date $date -Threads $Threads
+        $AADRObject = Get-AADRUser -Method $Method -date $date -DormantTimeSpan $DormantTimeSpan -PassMaxAge $PassMaxAge -PageSize $PageSize -Threads $Threads
         If ($AADRObject)
         {
             Export-ADR -ADRObj $AADRObject -AADROutputDir $AADROutputDir -OutputType $OutputType -ADRModuleName "Users"
@@ -3538,7 +4052,7 @@ Function Invoke-AzureADRecon
         }
         'EXCEL'
         {
-            Export-ADRExcel $AADROutputDir
+            Export-ADRExcel $AADROutputDir -Logo $Logo
         }
     }
     Remove-Variable TotalTime
@@ -3549,6 +4063,11 @@ Function Invoke-AzureADRecon
     If ($Method -eq 'AzureAD')
     {
         Disconnect-AzureAD
+    }
+
+    If ($Method -eq 'MSGraph')
+    {
+        Disconnect-MgGraph
     }
 
     If ($AADROutputDir)
