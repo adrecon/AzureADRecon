@@ -1789,7 +1789,7 @@ Function Get-ADRExcelAttributeStats
             $ExcelColumn = ($SrcWorksheet.Columns.Find($_))
             $ColAddress = "$($ExcelColumn.Address($false,$false).Substring(0,$ExcelColumn.Address($false,$false).Length-1)):$($ExcelColumn.Address($false,$false).Substring(0,$ExcelColumn.Address($false,$false).Length-1))"
             $row++
-
+            $i++
             If ($_ -eq "UserType")
             {
                 $worksheet.Cells.Item($row, $column) = "Guest"
@@ -1820,7 +1820,7 @@ Function Get-ADRExcelAttributeStats
             {
                 $worksheet.Cells.Item($row, $column+1).Formula = "=COUNTIFS('" + $SrcWorksheet.Name + "'!" + $EnabledColAddress + ',"TRUE",' + "'" + $SrcWorksheet.Name + "'!" + $ColAddress + ',' + $ObjAttributes[$_] + ')'
             }
-            $worksheet.Cells.Item($row, $column+2).Formula = '=IFERROR(G' + $i + '/VLOOKUP("Enabled",A3:B6,2,FALSE),0)'
+            $worksheet.Cells.Item($row, $column+2).Formula = '=IFERROR(G' + $i + '/VLOOKUP("Enabled",A3:B5,2,FALSE),0)'
             If ($_ -eq "PasswordPolicies")
             {
                 # Remove count of "None"
@@ -1830,7 +1830,7 @@ Function Get-ADRExcelAttributeStats
             {
                 $worksheet.Cells.Item($row, $column+3).Formula = "=COUNTIFS('" + $SrcWorksheet.Name + "'!" + $EnabledColAddress + ',"FALSE",' + "'" + $SrcWorksheet.Name + "'!" + $ColAddress + ',' + $ObjAttributes[$_] + ')'
             }
-            $worksheet.Cells.Item($row, $column+4).Formula = '=IFERROR(I' + $i + '/VLOOKUP("Disabled",A3:B6,2,FALSE),0)'
+            $worksheet.Cells.Item($row, $column+4).Formula = '=IFERROR(I' + $i + '/VLOOKUP("Disabled",A3:B5,2,FALSE),0)'
             If ($_ -eq "AssignedLicenses")
             {
                 # Remove count of FieldName
@@ -1845,7 +1845,7 @@ Function Get-ADRExcelAttributeStats
             {
                 $worksheet.Cells.Item($row, $column+5).Formula = "=COUNTIF('" + $SrcWorksheet.Name + "'!" + $ColAddress + ',' + $ObjAttributes[$_] + ')'
             }
-            $worksheet.Cells.Item($row, $column+6).Formula = '=IFERROR(K' + $i + '/VLOOKUP("Total",A3:B6,2,FALSE),0)'
+            $worksheet.Cells.Item($row, $column+6).Formula = '=IFERROR(K' + $i + '/VLOOKUP("Total",A3:B5,2,FALSE),0)'
         }
 
         # http://www.excelhowto.com/macros/formatting-a-range-of-cells-in-excel-vba/
