@@ -516,7 +516,7 @@ namespace AADRecon
                         "State", AzureADTenant.Members["State"].Value,
                         "Country", AzureADTenant.Members["Country"].Value,
                         "CountryLetterCode", AzureADTenant.Members["CountryLetterCode"].Value,
-                        "TechnicalNotificationMails", TechnicalNotificationMails
+                        "TechnicalNotificationMails", TechnicalNotificationMails,
                         "TelephoneNumber", AzureADTenant.Members["TelephoneNumber"].Value
                     };
                     for (icount = 0; icount < ObjValues.Length; icount++)
