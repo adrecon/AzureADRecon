@@ -3455,8 +3455,8 @@ Function Invoke-AzureADRecon
                 # Suppress verbose output on module import
                 $SaveVerbosePreference = $script:VerbosePreference;
                 $script:VerbosePreference = 'SilentlyContinue';
-                Import-Module Microsoft.Graph -WarningAction Stop -ErrorAction Stop | Out-Null
-                Select-MgProfile -Name Beta
+                #Import-Module Microsoft.Graph -WarningAction Stop -ErrorAction Stop | Out-Null
+                #Select-MgProfile -Name Beta
                 If ($SaveVerbosePreference)
                 {
                     $script:VerbosePreference = $SaveVerbosePreference
@@ -3843,23 +3843,29 @@ Function Invoke-AzureADRecon
 
             If ($AccessToken)
             {
-                $body = @{
-                    Grant_Type    = "client_credentials"
-                    Scope         = "https://graph.microsoft.com/.default"
-                    Client_Id     = $ClientID
-                    Client_Secret = $ClientSecret
-                }
+                #$body = @{
+                #    Grant_Type    = "client_credentials"
+                #    Scope         = "https://graph.microsoft.com/.default"
+                #    Client_Id     = $ClientID
+                #    Client_Secret = $ClientSecret
+                #}
 
-                $connection = Invoke-RestMethod `
-                    -Uri https://login.microsoftonline.com/$TenantID/oauth2/v2.0/token `
-                    -Method POST `
-                    -Body $body
+                #$connection = Invoke-RestMethod `
+                #    -Uri https://login.microsoftonline.com/$TenantID/oauth2/v2.0/token `
+                #    -Method POST `
+                #    -Body $body
 
-                Connect-MgGraph -AccessToken $($connection.access_token) -Scopes $Scopes | Out-Null
+                # Convert to SecureString
+                [SecureString]$secStringClientSecret = ConvertTo-SecureString $ClientSecret -AsPlainText -Force
+                [PSCredential]$ClientSecretCredential = New-Object System.Management.Automation.PSCredential ($ClientID, $secStringClientSecret)
+                Connect-MgGraph -TenantId $TenantID -ClientSecretCredential $ClientSecretCredential -NoWelcome
+                #Connect-MgGraph -AccessToken $($connection.access_token) | Out-Null
                 Remove-Variable ClientID
                 Remove-Variable ClientSecret
                 Remove-Variable TenantID
                 Remove-Variable AccessToken
+                Remove-Variable secStringClientSecret
+                Remove-Variable ClientSecretCredential
             }
             ElseIf ($CertThumbprint)
             {
