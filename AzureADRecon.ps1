@@ -3419,7 +3419,6 @@ Function Get-AADRUser
         {
             $ProcessedUserCount = 0
             Write-Verbose "[*] Total Users: $($AzureADUsers.Count)"
-            # Subnets Info
             $UserObj = @()
             $AzureADUsers | ForEach-Object {
                 $ProcessedUserCount++
@@ -3472,7 +3471,7 @@ Function Get-AADRUser
                 $Is3rdPartyAuthenticatorUsed = "False"
                 $MFAPhone = "-"
                 $MicrosoftAuthenticatorDevice = "-"
-                Write-Progress -Activity "`n Processed users count: $ProcessedUserCount Currently processing user: $($_.DisplayName)`n"
+                Write-Progress -Activity "`n Processed users count: $ProcessedUserCount Currently processing: $($_.DisplayName)`n"
                 [array]$MFAData = Get-MgUserAuthenticationMethod -UserId $_.Id
                 $AuthenticationMethod = @()
                 $AdditionalDetails = @()
@@ -3752,6 +3751,7 @@ Function Get-AADRDirectoryRoleMember
         $AADRDirectoryRoles = @( Get-AzureADDirectoryRole )
         If ($AADRDirectoryRoles)
         {
+            Write-Verbose "[*] Total DirectoryRoles: $($AADRDirectoryRoles.Count)"
             $AADRDirectoryRoleMemberObj = @()
             $AADRDirectoryRoles | ForEach-Object {
                 $AADRDirectoryRoleMember = Get-AzureADDirectoryRoleMember -ObjectId $_.ObjectId
@@ -3774,32 +3774,35 @@ Function Get-AADRDirectoryRoleMember
     If ($Method -eq 'MSGraph') {
         $AADRDirectoryRoles = @( Get-MgDirectoryRole -All -PageSize $Pagesize)
         If ($AADRDirectoryRoles) {
-            If ($AADRDirectoryRoles) {
-                $AADRDirectoryRoleMemberObj = @()
-                $AADRDirectoryRoles | ForEach-Object {
-                    $AADRDirectoryRoleMember = Get-MgDirectoryRoleMember -DirectoryRoleId $_.Id
-                    $DirectoryRoleName = $([AADRecon.AzureADClass]::CleanString($_.DisplayName))
-                    If ($AADRDirectoryRoleMember) {
-                        $AADRDirectoryRoleMember | ForEach-Object {
-                            # Create the object for each instance.
-                            $Obj = New-Object PSObject
-                            $Obj | Add-Member -MemberType NoteProperty -Name DirectoryRole -Value $DirectoryRoleName
-                            If ($_.AdditionalProperties."@odata.type" -eq "#microsoft.graph.user")
-                            {
-                                $UserDetails = Get-MgUser -UserId $_.Id
-                                $Obj | Add-Member -MemberType NoteProperty -Name MemberName -Value $([AADRecon.AzureADClass]::CleanString($UserDetails.DisplayName))
-                                $Obj | Add-Member -MemberType NoteProperty -Name MemberUserPrincipalName -Value $([AADRecon.AzureADClass]::CleanString($UserDetails.UserPrincipalName))
-                                $Obj | Add-Member -MemberType NoteProperty -Name Type -Value "User"
-                                $AADRDirectoryRoleMemberObj += $Obj
-                            }
-                            If ($_.AdditionalProperties."@odata.type" -eq "#microsoft.graph.group") {
-                                $GroupDetails = Get-MgGroup -GroupId $_.Id
-                                $Obj | Add-Member -MemberType NoteProperty -Name MemberName -Value $([AADRecon.AzureADClass]::CleanString($GroupDetails.DisplayName))
-                                $Obj | Add-Member -MemberType NoteProperty -Name MemberUserPrincipalName -Value ""
-                                $Obj | Add-Member -MemberType NoteProperty -Name Type -Value "Group"
-                                $AADRDirectoryRoleMemberObj += $Obj
-                            }
+            $ProcessedDirectoryRoleCount = 0
+            Write-Verbose "[*] Total DirectoryRoles: $($AADRDirectoryRoles.Count)"
+            $AADRDirectoryRoleMemberObj = @()
+            $AADRDirectoryRoles | ForEach-Object {
+                $ProcessedDirectoryRoleCount++
+                $AADRDirectoryRoleMember = Get-MgDirectoryRoleMember -DirectoryRoleId $_.Id
+                $DirectoryRoleName = $([AADRecon.AzureADClass]::CleanString($_.DisplayName))
+                If ($AADRDirectoryRoleMember) {
+                    $AADRDirectoryRoleMember | ForEach-Object {
+                        # Create the object for each instance.
+                        $Obj = New-Object PSObject
+                        $Obj | Add-Member -MemberType NoteProperty -Name DirectoryRole -Value $DirectoryRoleName
+                        If ($_.AdditionalProperties."@odata.type" -eq "#microsoft.graph.user")
+                        {
+                            $UserDetails = Get-MgUser -UserId $_.Id
+                            $Obj | Add-Member -MemberType NoteProperty -Name MemberName -Value $([AADRecon.AzureADClass]::CleanString($UserDetails.DisplayName))
+                            $Obj | Add-Member -MemberType NoteProperty -Name MemberUserPrincipalName -Value $([AADRecon.AzureADClass]::CleanString($UserDetails.UserPrincipalName))
+                            $Obj | Add-Member -MemberType NoteProperty -Name Type -Value "User"
+                            $AADRDirectoryRoleMemberObj += $Obj
                         }
+                        If ($_.AdditionalProperties."@odata.type" -eq "#microsoft.graph.group") {
+                            $GroupDetails = Get-MgGroup -GroupId $_.Id
+                            $Obj | Add-Member -MemberType NoteProperty -Name MemberName -Value $([AADRecon.AzureADClass]::CleanString($GroupDetails.DisplayName))
+                            $Obj | Add-Member -MemberType NoteProperty -Name MemberUserPrincipalName -Value ""
+                            $Obj | Add-Member -MemberType NoteProperty -Name Type -Value "Group"
+                            $AADRDirectoryRoleMemberObj += $Obj
+                        }
+                        Write-Progress -Activity "`n Processed DirectoryRole count: $ProcessedDirectoryRoleCount Currently processing: $($DirectoryRoleName)`n"
+
                     }
                 }
             }
@@ -4982,7 +4985,7 @@ Function Invoke-AzureADRecon
 
     If ($Method -eq 'MSGraph')
     {
-        Disconnect-MgGraph
+        Disconnect-MgGraph | Out-Null
     }
 
     If ($AADROutputDir)
