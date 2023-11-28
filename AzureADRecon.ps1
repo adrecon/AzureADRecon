@@ -3678,6 +3678,7 @@ Function Get-AADRDirectoryRole
         {
             Write-Verbose "[*] Total DirectoryRoles: $($AADRDirectoryRoles.Count)"
             $AADRDirectoryRolesObj = [AADRecon.AzureADClass]::DirectoryRoleParser($AADRDirectoryRoles, $Threads)
+            Remove-Variable AADRDirectoryRoles
         }
     }
 
@@ -3768,6 +3769,8 @@ Function Get-AADRDirectoryRoleMember
                     }
                 }
             }
+            Remove-Variable AADRDirectoryRoles
+            Remove-Variable AADRDirectoryRoleMember
         }
     }
 
@@ -3802,10 +3805,13 @@ Function Get-AADRDirectoryRoleMember
                             $AADRDirectoryRoleMemberObj += $Obj
                         }
                         Write-Progress -Activity "`n Processed DirectoryRole count: $ProcessedDirectoryRoleCount Currently processing: $($DirectoryRoleName)`n"
-
                     }
                 }
             }
+            Write-Progress -Activity "Processed DirectoryRole" -Completed
+            Remove-Variable AADRDirectoryRoles
+            Remove-Variable DirectoryRoleName
+            Remove-Variable AADRDirectoryRoleMember
         }
     }
 
