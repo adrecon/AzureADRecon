@@ -942,6 +942,785 @@ namespace AADRecon
 }
 "@
 
+$MSGraphSource = @"
+// Thanks Dennis Albuquerque for the C# multithreading code
+using System;
+using System.Collections.Generic;
+using System.Management.Automation;
+using System.Threading;
+
+namespace AADRecon
+{
+    public static class AzureADClass
+    {
+        //Values taken from https://docs.microsoft.com/en-us/azure/active-directory/users-groups-roles/licensing-service-plan-reference
+        private static Dictionary<string, string> AzureSkuIDDictionary = new Dictionary<string, string>()
+        {
+            {"0c266dff-15dd-4b49-8397-2bb16070ed52", "Audio Conferencing"},
+            {"2b9c8e7c-319c-43a2-a2a0-48c5c6161de7", "Azure Active Directory Basic"},
+            {"078d2b04-f1bd-4111-bbd4-b4b1b354cef4", "Azure Active Directory Premium P1"},
+            {"84a661c4-e949-4bd2-a560-ed7766fcaf2b", "Azure Active Directory Premium P2"},
+            {"c52ea49f-fe5d-4e95-93ba-1de91d380f89", "Azure Information Protection Plan 1"},
+            {"ea126fc5-a19e-42e2-a731-da9d437bffcf", "Dynamics 365 Customer Engagement Plan Enterprise Edition"},
+            {"749742bf-0d37-4158-a120-33567104deeb", "Dynamics 365 For Customer Service Enterprise Edition"},
+            {"cc13a803-544e-4464-b4e4-6d6169a138fa", "Dynamics 365 For Financials Business Edition"},
+            {"8edc2cf8-6438-4fa9-b6e3-aa1660c640cc", "Dynamics 365 For Sales And Customer Service Enterprise Edition"},
+            {"1e1a282c-9c54-43a2-9310-98ef728faace", "Dynamics 365 For Sales Enterprise Edition"},
+            {"8e7a3d30-d97d-43ab-837c-d7701cef83dc", "Dynamics 365 For Team Members Enterprise Edition"},
+            {"ccba3cfe-71ef-423a-bd87-b6df3dce59a9", "Dynamics 365 Unf Ops Plan Ent Edition"},
+            {"efccb6f7-5641-4e0e-bd10-b4976e1bf68e", "Enterprise Mobility + Security E3"},
+            {"b05e124f-c7cc-45a0-a6aa-8cf78c946968", "Enterprise Mobility + Security E5"},
+            {"4b9405b0-7788-4568-add1-99614e613b69", "Exchange Online (Plan 1)"},
+            {"19ec0d23-8335-4cbd-94ac-6050e30712fa", "Exchange Online (Plan 2)"},
+            {"ee02fd1b-340e-4a4b-b355-4a514e4c8943", "Exchange Online Archiving For Exchange Online"},
+            {"90b5e015-709a-4b8b-b08e-3200f994494c", "Exchange Online Archiving For Exchange Server"},
+            {"7fc0182e-d107-4556-8329-7caaa511197b", "Exchange Online Essentials"},
+            {"e8f81a67-bd96-4074-b108-cf193eb9433b", "Exchange Online Essentials"},
+            {"80b2d799-d2ba-4d2a-8842-fb0d0f3a4b82", "Exchange Online Kiosk"},
+            {"cb0a98a8-11bc-494c-83d9-c1b1ac65327e", "Exchange Online Pop"},
+            {"061f9ace-7d42-4136-88ac-31dc755f143f", "Intune"},
+            {"b17653a4-2443-4e8c-a550-18249dda78bb", "Microsoft 365 A1"},
+            {"4b590615-0888-425a-a965-b3bf7789848d", "Microsoft 365 A3 For Faculty"},
+            {"7cfd9a2b-e110-4c39-bf20-c6a3f36a3121", "Microsoft 365 A3 For Students"},
+            {"e97c048c-37a4-45fb-ab50-922fbf07a370", "Microsoft 365 A5 For Faculty"},
+            {"46c119d4-0379-4a9d-85e4-97c66d3f909e", "Microsoft 365 A5 For Students"},
+            {"cbdc14ab-d96c-4c30-b9f4-6ada7cdc1d46", "Microsoft 365 Business"},
+            {"05e9a617-0261-4cee-bb44-138d3ef5d965", "Microsoft 365 E3"},
+            {"06ebc4ee-1bb5-47dd-8120-11324bc54e06", "Microsoft 365 E5"},
+            {"d61d61cc-f992-433f-a577-5bd016037eeb", "Microsoft 365 E3_Usgov_Dod"},
+            {"ca9d1dd9-dfe9-4fef-b97c-9bc1ea3c3658", "Microsoft 365 E3_Usgov_Gcchigh"},
+            {"184efa21-98c3-4e5d-95ab-d07053a96e67", "Microsoft 365 E5 Compliance"},
+            {"26124093-3d78-432b-b5dc-48bf992543d5", "Microsoft 365 E5 Security"},
+            {"44ac31e7-2999-4304-ad94-c948886741d4", "Microsoft 365 E5 Security For Ems E5"},
+            {"66b55226-6b4f-492c-910c-a3b7a3c9d993", "Microsoft 365 F1"},
+            {"111046dd-295b-4d6d-9724-d52ac90bd1f2", "Microsoft Defender Advanced Threat Protection"},
+            {"906af65a-2970-46d5-9b58-4e9aa50f0657", "Microsoft Dynamics Crm Online Basic"},
+            {"d17b27af-3f49-4822-99f9-56a661538792", "Microsoft Dynamics Crm Online"},
+            {"ba9a34de-4489-469d-879c-0f0f145321cd", "Ms Imagine Academy"},
+            {"a4585165-0533-458a-97e3-c400570268c4", "Office 365 A5 For Faculty"},
+            {"ee656612-49fa-43e5-b67e-cb1fdf7699df", "Office 365 A5 For Students"},
+            {"1b1b1f7a-8355-43b6-829f-336cfccb744c", "Office 365 Advanced Compliance"},
+            {"4ef96642-f096-40de-a3e9-d83fb2f90211", "Office 365 Advanced Threat Protection (Plan 1)"},
+            {"cdd28e44-67e3-425e-be4c-737fab2899d3", "Office 365 Business"},
+            {"b214fe43-f5a3-4703-beeb-fa97188220fc", "Office 365 Business"},
+            {"3b555118-da6a-4418-894f-7df1e2096870", "Office 365 Business Essentials"},
+            {"dab7782a-93b1-4074-8bb1-0e61318bea0b", "Office 365 Business Essentials"},
+            {"f245ecc8-75af-4f8e-b61f-27d8114de5f3", "Office 365 Business Premium"},
+            {"ac5cef5d-921b-4f97-9ef3-c99076e5470f", "Office 365 Business Premium"},
+            {"18181a46-0d4e-45cd-891e-60aabd171b4e", "Office 365 E1"},
+            {"6634e0ce-1a9f-428c-a498-f84ec7b8aa2e", "Office 365 E2"},
+            {"6fd2c87f-b296-42f0-b197-1e91e994b900", "Office 365 E3"},
+            {"189a915c-fe4f-4ffa-bde4-85b9628d07a0", "Office 365 E3 Developer"},
+            {"b107e5a3-3e60-4c0d-a184-a7e4395eb44c", "Office 365 E3_Usgov_Dod"},
+            {"aea38a85-9bd5-4981-aa00-616b411205bf", "Office 365 E3_Usgov_Gcchigh"},
+            {"1392051d-0cb9-4b7a-88d5-621fee5e8711", "Office 365 E4"},
+            {"c7df2760-2c81-4ef7-b578-5b5392b571df", "Office 365 E5"},
+            {"26d45bd9-adf1-46cd-a9e1-51e9a5524128", "Office 365 E5 Without Audio Conferencing"},
+            {"4b585984-651b-448a-9e53-3b10f069cf7f", "Office 365 F1"},
+            {"04a7fb0d-32e0-4241-b4f5-3f7618cd1162", "Office 365 Midsize Business"},
+            {"c2273bd0-dff7-4215-9ef5-2c7bcfb06425", "Office 365 Proplus"},
+            {"bd09678e-b83c-4d3f-aaba-3dad4abd128b", "Office 365 Small Business"},
+            {"fc14ec4a-4169-49a4-a51e-2c852931814b", "Office 365 Small Business Premium"},
+            {"e6778190-713e-4e4f-9119-8b8238de25df", "Onedrive For Business (Plan 1)"},
+            {"ed01faf2-1d88-4947-ae91-45ca18703a96", "Onedrive For Business (Plan 2)"},
+            {"b30411f5-fea1-4a59-9ad9-3db7c7ead579", "Power Apps Per User Plan"},
+            {"45bc2c81-6072-436a-9b0b-3b12eefbc402", "Power Bi For Office 365 Add-On"},
+            {"f8a1db68-be16-40ed-86d5-cb42ce701560", "Power Bi Pro"},
+            {"a10d5e58-74da-4312-95c8-76be4e5b75a0", "Project For Office 365"},
+            {"776df282-9fc0-4862-99e2-70e561b9909e", "Project Online Essentials"},
+            {"09015f9f-377f-4538-bbb5-f75ceb09358a", "Project Online Premium"},
+            {"2db84718-652c-47a7-860c-f10d8abbdae3", "Project Online Premium Without Project Client"},
+            {"53818b1b-4a27-454b-8896-0dba576410e6", "Project Online Professional"},
+            {"f82a60b8-1ee3-4cfb-a4fe-1c6a53c2656c", "Project Online With Project For Office 365"},
+            {"1fc08a02-8b3d-43b9-831e-f76859e04e1a", "Sharepoint Online (Plan 1)"},
+            {"a9732ec9-17d9-494c-a51c-d6b45b384dcb", "Sharepoint Online (Plan 2)"},
+            {"e43b5b99-8dfb-405f-9987-dc307f34bcbd", "Skype For Business Cloud Pbx"},
+            {"b8b749f8-a4ef-4887-9539-c95b1eaa5db7", "Skype For Business Online (Plan 1)"},
+            {"d42c793f-6c78-4f43-92ca-e8f6a02b035f", "Skype For Business Online (Plan 2)"},
+            {"d3b4fe1f-9992-4930-8acb-ca6ec609365e", "Skype For Business Pstn Domestic And International Calling"},
+            {"0dab259f-bf13-4952-b7f8-7db8f131b28d", "Skype For Business Pstn Domestic Calling"},
+            {"54a152dc-90de-4996-93d2-bc47e670fc06", "Skype For Business Pstn Domestic Calling (120 Minutes)"},
+            {"4b244418-9658-4451-a2b8-b5e2b364e9bd", "Visio Online Plan 1"},
+            {"c5928f49-12ba-48f7-ada3-0d743a3601d5", "Visio Online Plan 2"},
+            {"cb10e6cd-9da4-4992-867b-67546b1db821", "Windows 10 Enterprise E3"},
+            {"488ba24a-39a9-4473-8ee5-19291e71b002", "Windows 10 Enterprise E5"}
+        };
+
+        // Add missing SkuIDs to the dictionary
+        private static void UpdateSkuIDDictionary(Object[] AdLicenses)
+        {
+            foreach (PSObject AdLicense in AdLicenses)
+            {
+                if (!AzureADClass.AzureSkuIDDictionary.ContainsKey(Convert.ToString(AdLicense.Members["SkuId"].Value)))
+                {
+                    AzureADClass.AzureSkuIDDictionary.Add(Convert.ToString(AdLicense.Members["SkuId"].Value),Convert.ToString(AdLicense.Members["SkuPartNumber"].Value));
+                }
+            }
+        }
+
+		private static readonly Dictionary<string, string> Replacements = new Dictionary<string, string>()
+        {
+            //{System.Environment.NewLine, ""},
+            //{",", ";"},
+            {"\"", "'"}
+        };
+
+        public static string CleanString(Object StringtoClean)
+        {
+            // Remove extra spaces and new lines
+            string CleanedString = string.Join(" ", ((Convert.ToString(StringtoClean)).Split((string[]) null, StringSplitOptions.RemoveEmptyEntries)));
+            foreach (string Replacement in Replacements.Keys)
+            {
+                CleanedString = CleanedString.Replace(Replacement, Replacements[Replacement]);
+            }
+            return CleanedString;
+        }
+
+        public static int ObjectCount(Object[] ADRObject)
+        {
+            return ADRObject.Length;
+        }
+
+        public static Object[] TenantParser(Object[] AdTenant, int numOfThreads)
+        {
+            Object[] ADRObj = runProcessor(AdTenant, numOfThreads, "Tenant");
+            return ADRObj;
+        }
+
+        public static Object[] DomainParser(Object[] AdDomain, int numOfThreads)
+        {
+            Object[] ADRObj = runProcessor(AdDomain, numOfThreads, "Domain");
+            return ADRObj;
+        }
+
+        public static Object[] LicenseParser(Object[] AdLicenses, int numOfThreads)
+        {
+            Object[] ADRObj = runProcessor(AdLicenses, numOfThreads, "Licenses");
+            return ADRObj;
+        }
+
+        public static Object[] UserParser(Object[] AdUsers, Object[] AdLicenses, int numOfThreads)
+        {
+            AzureADClass.UpdateSkuIDDictionary(AdLicenses);
+            Object[] ADRObj = runProcessor(AdUsers, numOfThreads, "Users");
+            return ADRObj;
+        }
+
+        public static Object[] ServicePrincipalParser(Object[] AdServicePrincipals, int numOfThreads)
+        {
+            Object[] ADRObj = runProcessor(AdServicePrincipals, numOfThreads, "ServicePrincipals");
+            return ADRObj;
+        }
+
+        public static Object[] DirectoryRoleParser(Object[] AdDirectoryRoles, int numOfThreads)
+        {
+            Object[] ADRObj = runProcessor(AdDirectoryRoles, numOfThreads, "DirectoryRoles");
+            return ADRObj;
+        }
+
+        public static Object[] GroupParser(Object[] AdGroups, int numOfThreads)
+        {
+            Object[] ADRObj = runProcessor(AdGroups, numOfThreads, "Groups");
+            return ADRObj;
+        }
+
+        public static Object[] DeviceParser(Object[] AdDevices, int numOfThreads)
+        {
+            Object[] ADRObj = runProcessor(AdDevices, numOfThreads, "Devices");
+            return ADRObj;
+        }
+
+        static Object[] runProcessor(Object[] arrayToProcess, int numOfThreads, string processorType)
+        {
+            int totalRecords = arrayToProcess.Length;
+            IRecordProcessor recordProcessor = recordProcessorFactory(processorType);
+            IResultsHandler resultsHandler = new SimpleResultsHandler ();
+            int numberOfRecordsPerThread = totalRecords / numOfThreads;
+            int remainders = totalRecords % numOfThreads;
+
+            Thread[] threads = new Thread[numOfThreads];
+            for (int i = 0; i < numOfThreads; i++)
+            {
+                int numberOfRecordsToProcess = numberOfRecordsPerThread;
+                if (i == (numOfThreads - 1))
+                {
+                    //last thread, do the remaining records
+                    numberOfRecordsToProcess += remainders;
+                }
+
+                //split the full array into chunks to be given to different threads
+                Object[] sliceToProcess = new Object[numberOfRecordsToProcess];
+                Array.Copy(arrayToProcess, i * numberOfRecordsPerThread, sliceToProcess, 0, numberOfRecordsToProcess);
+                ProcessorThread processorThread = new ProcessorThread(i, recordProcessor, resultsHandler, sliceToProcess);
+                threads[i] = new Thread(processorThread.processThreadRecords);
+                threads[i].Start();
+            }
+            foreach (Thread t in threads)
+            {
+                t.Join();
+            }
+
+            return resultsHandler.finalise();
+        }
+
+        static IRecordProcessor recordProcessorFactory(string name)
+        {
+            switch (name)
+            {
+                case "Tenant":
+                    return new TenantRecordProcessor();
+                case "Domain":
+                    return new DomainRecordProcessor();
+                case "Licenses":
+                    return new LicenseRecordProcessor();
+                case "Users":
+                    return new UserRecordProcessor();
+                case "ServicePrincipals":
+                    return new ServicePrincipalRecordProcessor();
+                case "DirectoryRoles":
+                    return new DirectoryRoleRecordProcessor();
+                case "Groups":
+                    return new GroupRecordProcessor();
+                case "Devices":
+                    return new DeviceRecordProcessor();
+            }
+            throw new ArgumentException("Invalid processor type " + name);
+        }
+
+        class ProcessorThread
+        {
+            readonly int id;
+            readonly IRecordProcessor recordProcessor;
+            readonly IResultsHandler resultsHandler;
+            readonly Object[] objectsToBeProcessed;
+
+            public ProcessorThread(int id, IRecordProcessor recordProcessor, IResultsHandler resultsHandler, Object[] objectsToBeProcessed)
+            {
+                this.recordProcessor = recordProcessor;
+                this.id = id;
+                this.resultsHandler = resultsHandler;
+                this.objectsToBeProcessed = objectsToBeProcessed;
+            }
+
+            public void processThreadRecords()
+            {
+                for (int i = 0; i < objectsToBeProcessed.Length; i++)
+                {
+                    Object[] result = recordProcessor.processRecord(objectsToBeProcessed[i]);
+                    resultsHandler.processResults(result); //this is a thread safe operation
+                }
+            }
+        }
+
+        //The interface and implmentation class used to process a record (this implemmentation just returns a log type string)
+
+        interface IRecordProcessor
+        {
+            PSObject[] processRecord(Object record);
+        }
+
+        class TenantRecordProcessor : IRecordProcessor
+        {
+            public PSObject[] processRecord(Object record)
+            {
+                try
+                {
+                    PSObject AzureADTenant = (PSObject) record;
+
+                    List<PSObject> AzureADTenantObjList = new List<PSObject>();
+                    PSObject AzureADTenantObj = new PSObject();
+                    int icount = 0;
+
+                    //List<Microsoft.Open.AzureAD.Model.VerifiedDomain> VerifiedDomainsList = new List<Microsoft.Open.AzureAD.Model.VerifiedDomain>();
+                    List<string> TechnicalNotificationMailsList = new List<string>();
+                    //List<Microsoft.Open.AzureAD.Model.AssignedPlan> AssignedPlanList = new List<Microsoft.Open.AzureAD.Model.AssignedPlan>();
+                    //int count = 0;
+                    string TechnicalNotificationMails = null;
+
+                    Object[] ObjValues = new Object[]{
+                        "DisplayName", CleanString(AzureADTenant.Members["DisplayName"].Value)
+                    };
+
+                    for (icount = 0; icount < ObjValues.Length; icount++)
+                    {
+                        AzureADTenantObj = new PSObject();
+                        AzureADTenantObj.Members.Add(new PSNoteProperty("Category", ObjValues[icount]));
+                        AzureADTenantObj.Members.Add(new PSNoteProperty("Value", ObjValues[icount+1]));
+                        AzureADTenantObjList.Add( AzureADTenantObj );
+                        icount++;
+                    }
+
+                    //if (((List<Microsoft.Open.AzureAD.Model.VerifiedDomain>) AzureADTenant.Members["VerifiedDomains"].Value).Count != 0)
+                    //{
+                    //    VerifiedDomainsList = (List<Microsoft.Open.AzureAD.Model.VerifiedDomain>) AzureADTenant.Members["VerifiedDomains"].Value;
+                    //    count = 0;
+                    //    foreach (Microsoft.Open.AzureAD.Model.VerifiedDomain value in VerifiedDomainsList)
+                    //    {
+                    //        ObjValues = new Object[]{
+                    //            "VerifiedDomain(" + count + ") - Name", value.Name,
+                    //            "VerifiedDomain(" + count + ") - Type", value.Type,
+                    //            "VerifiedDomain(" + count + ") - Capabilities", value.Capabilities,
+                    //            "VerifiedDomain(" + count + ") - _Default", value._Default,
+                    //            "VerifiedDomain(" + count + ") - Initial", value.Initial,
+                    //            "VerifiedDomain(" + count + ") - Id", value.Id
+                    //        };
+                    //        for (icount = 0; icount < ObjValues.Length; icount++)
+                    //        {
+                    //            AzureADTenantObj = new PSObject();
+                    //            AzureADTenantObj.Members.Add(new PSNoteProperty("Category", ObjValues[icount]));
+                    //            AzureADTenantObj.Members.Add(new PSNoteProperty("Value", ObjValues[icount+1]));
+                    //            AzureADTenantObjList.Add( AzureADTenantObj );
+                    //            icount++;
+                    //        }
+                    //        count++;
+                    //    }
+                    //}
+
+                    if (((List<string>) AzureADTenant.Members["TechnicalNotificationMails"].Value).Count != 0)
+                    {
+                        TechnicalNotificationMailsList = (List<string>) AzureADTenant.Members["TechnicalNotificationMails"].Value;
+                        foreach (string value in TechnicalNotificationMailsList)
+                        {
+                            TechnicalNotificationMails = TechnicalNotificationMails + "," + value;
+                        }
+                        TechnicalNotificationMails = TechnicalNotificationMails.TrimStart(',');
+                    }
+
+                    ObjValues = new Object[]{
+                        "DirSyncEnabled", AzureADTenant.Members["DirSyncEnabled"].Value,
+                        "CompanyLastDirSyncTime", AzureADTenant.Members["CompanyLastDirSyncTime"].Value,
+                        "Street", AzureADTenant.Members["Street"].Value,
+                        "City", AzureADTenant.Members["City"].Value,
+                        "PostalCode", AzureADTenant.Members["PostalCode"].Value,
+                        "State", AzureADTenant.Members["State"].Value,
+                        "Country", AzureADTenant.Members["Country"].Value,
+                        "CountryLetterCode", AzureADTenant.Members["CountryLetterCode"].Value,
+                        "TechnicalNotificationMails", TechnicalNotificationMails,
+                        "TelephoneNumber", AzureADTenant.Members["TelephoneNumber"].Value
+                    };
+                    for (icount = 0; icount < ObjValues.Length; icount++)
+                    {
+                        AzureADTenantObj = new PSObject();
+                        AzureADTenantObj.Members.Add(new PSNoteProperty("Category", ObjValues[icount]));
+                        AzureADTenantObj.Members.Add(new PSNoteProperty("Value", ObjValues[icount+1]));
+                        AzureADTenantObjList.Add( AzureADTenantObj );
+                        icount++;
+                    }
+
+                    //if (((List<Microsoft.Open.AzureAD.Model.AssignedPlan>) AzureADTenant.Members["AssignedPlans"].Value).Count != 0)
+                    //{
+                    //    AssignedPlanList = (List<Microsoft.Open.AzureAD.Model.AssignedPlan>) AzureADTenant.Members["AssignedPlans"].Value;
+                    //    count = 0;
+                    //    foreach (Microsoft.Open.AzureAD.Model.AssignedPlan value in AssignedPlanList)
+                    //    {
+                    //        ObjValues = new Object[]{
+                    //            "AssignedPlan(" + count + ") - AssignedTimestamp", value.AssignedTimestamp,
+                    //            "AssignedPlan(" + count + ") - CapabilityStatus", value.CapabilityStatus,
+                    //            "AssignedPlan(" + count + ") - Service", value.Service,
+                    //            "AssignedPlan(" + count + ") - ServicePlanId", value.ServicePlanId
+                    //        };
+                    //        for (icount = 0; icount < ObjValues.Length; icount++)
+                    //        {
+                    //            AzureADTenantObj = new PSObject();
+                    //            AzureADTenantObj.Members.Add(new PSNoteProperty("Category", ObjValues[icount]));
+                    //            AzureADTenantObj.Members.Add(new PSNoteProperty("Value", ObjValues[icount+1]));
+                    //            AzureADTenantObjList.Add( AzureADTenantObj );
+                    //            icount++;
+                    //        }
+                    //        count++;
+                    //    }
+                    //}
+
+                    ObjValues = new Object[]{
+                        "ObjectType", AzureADTenant.Members["ObjectType"].Value,
+                        "ObjectId", AzureADTenant.Members["ObjectId"].Value
+                    };
+                    for (icount = 0; icount < ObjValues.Length; icount++)
+                    {
+                        AzureADTenantObj = new PSObject();
+                        AzureADTenantObj.Members.Add(new PSNoteProperty("Category", ObjValues[icount]));
+                        AzureADTenantObj.Members.Add(new PSNoteProperty("Value", ObjValues[icount+1]));
+                        AzureADTenantObjList.Add( AzureADTenantObj );
+                        icount++;
+                    }
+
+                    return AzureADTenantObjList.ToArray();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Exception caught: {0}", e);
+                    return new PSObject[] { };
+                }
+            }
+        }
+
+        class DomainRecordProcessor : IRecordProcessor
+        {
+            public PSObject[] processRecord(Object record)
+            {
+                try
+                {
+                    PSObject AzureADDomain = (PSObject) record;
+
+                    List<string> SupportedServicesList = new List<string>();
+                    string SupportedServices = null;
+
+                    PSObject AzureADDomainObj = new PSObject();
+                    AzureADDomainObj.Members.Add(new PSNoteProperty("Name", CleanString(AzureADDomain.Members["Name"].Value)));
+                    AzureADDomainObj.Members.Add(new PSNoteProperty("AuthenticationType", AzureADDomain.Members["authenticationType"].Value));
+                    AzureADDomainObj.Members.Add(new PSNoteProperty("AvailabilityStatus", AzureADDomain.Members["availabilityStatus"].Value));
+                    AzureADDomainObj.Members.Add(new PSNoteProperty("isAdminManaged", AzureADDomain.Members["isAdminManaged"].Value));
+                    AzureADDomainObj.Members.Add(new PSNoteProperty("isDefault", AzureADDomain.Members["isDefault"].Value));
+                    AzureADDomainObj.Members.Add(new PSNoteProperty("isInitial", AzureADDomain.Members["isInitial"].Value));
+                    AzureADDomainObj.Members.Add(new PSNoteProperty("isRoot", AzureADDomain.Members["isRoot"].Value));
+                    AzureADDomainObj.Members.Add(new PSNoteProperty("isVerified", AzureADDomain.Members["isVerified"].Value));
+
+                    if (((List<string>) AzureADDomain.Members["SupportedServices"].Value).Count != 0)
+                    {
+                        SupportedServicesList = (List<string>) AzureADDomain.Members["SupportedServices"].Value;
+                        foreach (string value in SupportedServicesList)
+                        {
+                            SupportedServices = SupportedServices + "," + value;
+                        }
+                        SupportedServices = SupportedServices.TrimStart(',');
+                    }
+                    AzureADDomainObj.Members.Add(new PSNoteProperty("SupportedServices", SupportedServices));
+
+                    AzureADDomainObj.Members.Add(new PSNoteProperty("ForceDeleteState", AzureADDomain.Members["ForceDeleteState"].Value));
+                    AzureADDomainObj.Members.Add(new PSNoteProperty("State", AzureADDomain.Members["State"].Value));
+                    return new PSObject[] { AzureADDomainObj };
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Exception caught: {0}", e);
+                    return new PSObject[] { };
+                }
+            }
+        }
+
+        class LicenseRecordProcessor : IRecordProcessor
+        {
+            public PSObject[] processRecord(Object record)
+            {
+                try
+                {
+                    PSObject AzureADLicense = (PSObject) record;
+
+                    //string ServicePlanName = null;
+                    //List<Microsoft.Open.AzureAD.Model.ServicePlanInfo> ServicePlansList = new List<Microsoft.Open.AzureAD.Model.ServicePlanInfo>();
+
+                    PSObject AzureADLicenseObj = new PSObject();
+
+                    AzureADLicenseObj.Members.Add(new PSNoteProperty("SkuPartNumber", AzureADLicense.Members["SkuPartNumber"].Value));
+                    AzureADLicenseObj.Members.Add(new PSNoteProperty("SkuId", AzureADLicense.Members["SkuId"].Value));
+
+                    AzureADLicenseObj.Members.Add(new PSNoteProperty("ConsumedUnits", AzureADLicense.Members["ConsumedUnits"].Value));
+                    AzureADLicenseObj.Members.Add(new PSNoteProperty("AppliesTo", AzureADLicense.Members["AppliesTo"].Value));
+                    AzureADLicenseObj.Members.Add(new PSNoteProperty("CapabilityStatus", AzureADLicense.Members["CapabilityStatus"].Value));
+
+                    //if (((List<Microsoft.Open.AzureAD.Model.ServicePlanInfo>) AzureADLicense.Members["ServicePlans"].Value).Count != 0)
+                    //{
+                    //    ServicePlansList = (List<Microsoft.Open.AzureAD.Model.ServicePlanInfo>) AzureADLicense.Members["ServicePlans"].Value;
+                    //    foreach (Microsoft.Open.AzureAD.Model.ServicePlanInfo value in ServicePlansList)
+                    //    {
+                    //        ServicePlanName = ServicePlanName + "," + Convert.ToString(value.ServicePlanName);
+                    //    }
+                    //    ServicePlanName = ServicePlanName.TrimStart(',');
+                    //}
+
+                    //AzureADLicenseObj.Members.Add(new PSNoteProperty("PrepaidUnits-Enabled", (((Microsoft.Open.AzureAD.Model.LicenseUnitsDetail) AzureADLicense.Members["PrepaidUnits"].Value).Enabled)));
+                    //AzureADLicenseObj.Members.Add(new PSNoteProperty("PrepaidUnits-Suspended", (((Microsoft.Open.AzureAD.Model.LicenseUnitsDetail) AzureADLicense.Members["PrepaidUnits"].Value).Suspended)));
+                    //AzureADLicenseObj.Members.Add(new PSNoteProperty("PrepaidUnits-Warning", (((Microsoft.Open.AzureAD.Model.LicenseUnitsDetail) AzureADLicense.Members["PrepaidUnits"].Value).Warning)));
+                    //AzureADLicenseObj.Members.Add(new PSNoteProperty("ServicePlans-Name", ServicePlanName));
+                    AzureADLicenseObj.Members.Add(new PSNoteProperty("ObjectId", AzureADLicense.Members["ObjectId"].Value));
+
+                    return new PSObject[] { AzureADLicenseObj };
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Exception caught: {0}", e);
+                    return new PSObject[] { };
+                }
+            }
+        }
+
+        class UserRecordProcessor : IRecordProcessor
+        {
+            public PSObject[] processRecord(Object record)
+            {
+                try
+                {
+                    PSObject AzureAdUser = (PSObject) record;
+
+                    //List<Microsoft.Open.AzureAD.Model.AssignedLicense> AssignedLicensesList = new List<Microsoft.Open.AzureAD.Model.AssignedLicense>();
+                    //string AssignedLicenses = null;
+                    //string AssignedLicensesName = null;
+
+                    PSObject AzureADUserObj = new PSObject();
+                    AzureADUserObj.Members.Add(new PSNoteProperty("UserPrincipalName", CleanString(AzureAdUser.Members["UserPrincipalName"].Value)));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("DisplayName", CleanString(AzureAdUser.Members["DisplayName"].Value)));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("Enabled", AzureAdUser.Members["AccountEnabled"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("UserType", AzureAdUser.Members["UserType"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("JobTitle", AzureAdUser.Members["JobTitle"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("Department", AzureAdUser.Members["Department"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("Mobile", AzureAdUser.Members["Mobile"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("TelephoneNumber", AzureAdUser.Members["TelephoneNumber"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("DirSyncEnabled", AzureAdUser.Members["DirSyncEnabled"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("OnPremisesSecurityIdentifier",  AzureAdUser.Members["OnPremisesSecurityIdentifier"] != null ? AzureAdUser.Members["OnPremisesSecurityIdentifier"].Value : null));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("OnPremisesDistinguishedName", CleanString(((Dictionary<string, string>) AzureAdUser.Members["ExtensionProperty"].Value)["onPremisesDistinguishedName"])));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("LastDirSyncTime", AzureAdUser.Members["LastDirSyncTime"].Value));
+                    AzureADUserObj.Members.Add(new PSNoteProperty("whenCreated", ((Dictionary<string, string>) AzureAdUser.Members["ExtensionProperty"].Value)["createdDateTime"]));
+
+                    //if (((List<Microsoft.Open.AzureAD.Model.AssignedLicense>) AzureAdUser.Members["AssignedLicenses"].Value).Count != 0)
+                    //{
+                    //    AssignedLicensesList = (List<Microsoft.Open.AzureAD.Model.AssignedLicense>) AzureAdUser.Members["AssignedLicenses"].Value;
+                    //    foreach (Microsoft.Open.AzureAD.Model.AssignedLicense value in AssignedLicensesList)
+                    //    {
+                    //        AssignedLicenses = AssignedLicenses + "," + Convert.ToString(value.SkuId);
+                    //        AssignedLicensesName = AssignedLicensesName + "," + (AzureADClass.AzureSkuIDDictionary.ContainsKey(Convert.ToString(value.SkuId)) ? AzureADClass.AzureSkuIDDictionary[Convert.ToString(value.SkuId)] : Convert.ToString(value.SkuId));
+                    //    }
+                    //    AssignedLicenses = AssignedLicenses.TrimStart(',');
+                    //    AssignedLicensesName = AssignedLicensesName.TrimStart(',');
+                    //}
+
+                    //AzureADUserObj.Members.Add(new PSNoteProperty("Assigned Licenses (Count)", ((List<Microsoft.Open.AzureAD.Model.AssignedLicense>) AzureAdUser.Members["AssignedLicenses"].Value).Count));
+                    //AzureADUserObj.Members.Add(new PSNoteProperty("AssignedLicensesName", AssignedLicensesName));
+                    //AzureADUserObj.Members.Add(new PSNoteProperty("AssignedLicenses", AssignedLicenses));
+
+                    return new PSObject[] { AzureADUserObj };
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Exception caught: {0}", e);
+                    return new PSObject[] { };
+                }
+            }
+        }
+
+        class ServicePrincipalRecordProcessor : IRecordProcessor
+        {
+            public PSObject[] processRecord(Object record)
+            {
+                try
+                {
+                    PSObject AzureAdServicePrincipal = (PSObject) record;
+
+                    List<string> AADRList = new List<string>();
+                    string AADRString = null;
+                    int AADRCount = 0;
+                    //string AADRString2 = null;
+                    //List<Microsoft.Open.AzureAD.Model.AppRole> AppRolesList = new List<Microsoft.Open.AzureAD.Model.AppRole>();
+                    //List<Microsoft.Open.AzureAD.Model.OAuth2Permission> OAuth2PermissionList = new List<Microsoft.Open.AzureAD.Model.OAuth2Permission>();
+
+                    PSObject AzureAdServicePrincipalObj = new PSObject();
+                    AzureAdServicePrincipalObj.Members.Add(new PSNoteProperty("DisplayName", CleanString(AzureAdServicePrincipal.Members["DisplayName"].Value)));
+                    AzureAdServicePrincipalObj.Members.Add(new PSNoteProperty("Enabled", AzureAdServicePrincipal.Members["AccountEnabled"].Value));
+                    AzureAdServicePrincipalObj.Members.Add(new PSNoteProperty("PublisherName", AzureAdServicePrincipal.Members["PublisherName"].Value));
+                    AzureAdServicePrincipalObj.Members.Add(new PSNoteProperty("AppId", AzureAdServicePrincipal.Members["AppId"].Value));
+                    AzureAdServicePrincipalObj.Members.Add(new PSNoteProperty("ObjectId", AzureAdServicePrincipal.Members["ObjectId"].Value));
+
+                    AADRList = new List<string>();
+                    AADRString = null;
+                    if (((List<string>) AzureAdServicePrincipal.Members["ServicePrincipalNames"].Value).Count != 0)
+                    {
+                        AADRList = (List<string>) AzureAdServicePrincipal.Members["ServicePrincipalNames"].Value;
+                        foreach (string value in AADRList)
+                        {
+                            AADRString = AADRString + "," + value;
+                        }
+                        AADRString = AADRString.TrimStart(',');
+                    }
+                    AzureAdServicePrincipalObj.Members.Add(new PSNoteProperty("ServicePrincipalNames", AADRString));
+
+                    AADRList = new List<string>();
+                    AADRString = null;
+                    if (((List<string>) AzureAdServicePrincipal.Members["ReplyUrls"].Value).Count != 0)
+                    {
+                        AADRList = (List<string>) AzureAdServicePrincipal.Members["ReplyUrls"].Value;
+                        foreach (string value in AADRList)
+                        {
+                            AADRString = AADRString + "," + value;
+                        }
+                        AADRString = AADRString.TrimStart(',');
+                    }
+                    AzureAdServicePrincipalObj.Members.Add(new PSNoteProperty("ReplyUrls", AADRString));
+
+                    AzureAdServicePrincipalObj.Members.Add(new PSNoteProperty("LogoutUrl", AzureAdServicePrincipal.Members["LogoutUrl"].Value));
+
+                    AADRCount = 0;
+                    AADRString = null;
+                    //AADRString2 = null;
+                    //if (((List<Microsoft.Open.AzureAD.Model.AppRole>) AzureAdServicePrincipal.Members["AppRoles"].Value).Count != 0)
+                    //{
+                    //    AppRolesList = (List<Microsoft.Open.AzureAD.Model.AppRole>) AzureAdServicePrincipal.Members["AppRoles"].Value;
+                    //    AADRCount = AppRolesList.Count;
+                    //    foreach (Microsoft.Open.AzureAD.Model.AppRole value in AppRolesList)
+                    //    {
+                    //        AADRList = new List<string>();
+                    //        AADRString = null;
+                    //        if (((List<string>) value.AllowedMemberTypes).Count != 0)
+                    //        {
+                    //            AADRList = (List<string>) value.AllowedMemberTypes;
+                    //            foreach (string valuestring in AADRList)
+                    //            {
+                    //                AADRString = AADRString + "," + valuestring;
+                    //            }
+                    //            AADRString = AADRString.TrimStart(',');
+                    //        }
+                    //        AADRString2 = AADRString2 + AADRString + "," + value.Description + "," + value.Id + "," + value.IsEnabled + "," + value.Value + ",";
+                    //    }
+                    //    AADRString2 = AADRString2.TrimStart(',');
+                    //}
+                    //AzureAdServicePrincipalObj.Members.Add(new PSNoteProperty("AppRoles (Count)", AADRCount));
+                    //AzureAdServicePrincipalObj.Members.Add(new PSNoteProperty("AppRoles - AllowedMemberTypes,Description,Id,IsEnabled,Value", CleanString(AADRString2)));
+
+                    AADRCount = 0;
+                    AADRString = null;
+                    //if (((List<Microsoft.Open.AzureAD.Model.OAuth2Permission>) AzureAdServicePrincipal.Members["Oauth2Permissions"].Value).Count != 0)
+                    //{
+                    //    OAuth2PermissionList = (List<Microsoft.Open.AzureAD.Model.OAuth2Permission>) AzureAdServicePrincipal.Members["Oauth2Permissions"].Value;
+                    //    AADRCount = OAuth2PermissionList.Count;
+                    //    foreach (Microsoft.Open.AzureAD.Model.OAuth2Permission value in OAuth2PermissionList)
+                    //    {
+                    //        AADRString = AADRString + "," + value.AdminConsentDescription + "," + value.AdminConsentDisplayName + "," + value.Id + "," + value.IsEnabled + "," + value.Type + "," + value.UserConsentDescription + "," + value.UserConsentDisplayName + ","  + value.Value + ",";
+                    //    }
+                    //    AADRString = AADRString.TrimStart(',');
+                    //}
+                    AzureAdServicePrincipalObj.Members.Add(new PSNoteProperty("OAuth2Permissions (Count)", AADRCount));
+                    AzureAdServicePrincipalObj.Members.Add(new PSNoteProperty("OAuth2Permissions - AdminConsentDescription,AdminConsentDisplayName,Id,IsEnabled,Type,UserConsentDescription,UserConsentDisplayName,Value", CleanString(AADRString)));
+
+                    return new PSObject[] { AzureAdServicePrincipalObj };
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Exception caught: {0}", e);
+                    return new PSObject[] { };
+                }
+            }
+        }
+
+        class DirectoryRoleRecordProcessor : IRecordProcessor
+        {
+            public PSObject[] processRecord(Object record)
+            {
+                try
+                {
+                    PSObject AzureADDirectoryRole = (PSObject) record;
+
+                    PSObject AzureADDirectoryRoleObj = new PSObject();
+                    AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("DisplayName", CleanString(AzureADDirectoryRole.Members["DisplayName"].Value)));
+                    AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("RoleDisabled", AzureADDirectoryRole.Members["RoleDisabled"].Value));
+                    AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("IsSystem", AzureADDirectoryRole.Members["IsSystem"].Value));
+                    AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("Description", CleanString(AzureADDirectoryRole.Members["Description"].Value)));
+                    AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("RoleTemplateId", AzureADDirectoryRole.Members["RoleTemplateId"].Value));
+                    AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("ObjectId", AzureADDirectoryRole.Members["ObjectId"].Value));
+                    return new PSObject[] { AzureADDirectoryRoleObj };
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Exception caught: {0}", e);
+                    return new PSObject[] { };
+                }
+            }
+        }
+
+        class GroupRecordProcessor : IRecordProcessor
+        {
+            public PSObject[] processRecord(Object record)
+            {
+                try
+                {
+                    PSObject AzureADGroup = (PSObject) record;
+
+                    PSObject AzureADGroupObj = new PSObject();
+                    AzureADGroupObj.Members.Add(new PSNoteProperty("DisplayName", CleanString(AzureADGroup.Members["DisplayName"].Value)));
+                    AzureADGroupObj.Members.Add(new PSNoteProperty("DirSyncEnabled", AzureADGroup.Members["DirSyncEnabled"].Value));
+                    AzureADGroupObj.Members.Add(new PSNoteProperty("LastDirSyncTime", AzureADGroup.Members["LastDirSyncTime"].Value));
+                    AzureADGroupObj.Members.Add(new PSNoteProperty("OnPremisesSecurityIdentifier", AzureADGroup.Members["OnPremisesSecurityIdentifier"].Value));
+                    AzureADGroupObj.Members.Add(new PSNoteProperty("SecurityEnabled", AzureADGroup.Members["SecurityEnabled"].Value));
+                    AzureADGroupObj.Members.Add(new PSNoteProperty("Description", CleanString(AzureADGroup.Members["Description"].Value)));
+                    AzureADGroupObj.Members.Add(new PSNoteProperty("ObjectId", AzureADGroup.Members["ObjectId"].Value));
+                    return new PSObject[] { AzureADGroupObj };
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Exception caught: {0}", e);
+                    return new PSObject[] { };
+                }
+            }
+        }
+
+        class DeviceRecordProcessor : IRecordProcessor
+        {
+            public PSObject[] processRecord(Object record)
+            {
+                try
+                {
+                    PSObject AzureADDevice = (PSObject) record;
+
+                    PSObject AzureADDeviceObj = new PSObject();
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("DisplayName", CleanString(AzureADDevice.Members["DisplayName"].Value)));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("AccountEnabled", CleanString(AzureADDevice.Members["AccountEnabled"].Value)));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("DirSyncEnabled", AzureADDevice.Members["DirSyncEnabled"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("LastDirSyncTime", AzureADDevice.Members["LastDirSyncTime"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("DeviceOSType", AzureADDevice.Members["DeviceOSType"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("DeviceOSVersion", AzureADDevice.Members["DeviceOSVersion"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("ApproximateLastLogonTimeStamp", AzureADDevice.Members["ApproximateLastLogonTimeStamp"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("DeviceTrustType", AzureADDevice.Members["DeviceTrustType"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("ProfileType", AzureADDevice.Members["ProfileType"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("DeviceId", AzureADDevice.Members["DeviceId"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("ObjectId", AzureADDevice.Members["ObjectId"].Value));
+                    return new PSObject[] { AzureADDeviceObj };
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Exception caught: {0}", e);
+                    return new PSObject[] { };
+                }
+            }
+        }
+
+        //The interface and implmentation class used to handle the results (this implementation just writes the strings to a file)
+
+        interface IResultsHandler
+        {
+            void processResults(Object[] t);
+
+            Object[] finalise();
+        }
+
+        class SimpleResultsHandler : IResultsHandler
+        {
+            private Object lockObj = new Object();
+            private List<Object> processed = new List<Object>();
+
+            public SimpleResultsHandler()
+            {
+            }
+
+            public void processResults(Object[] results)
+            {
+                lock (lockObj)
+                {
+                    if (results.Length != 0)
+                    {
+                        for (var i = 0; i < results.Length; i++)
+                        {
+                            processed.Add((PSObject)results[i]);
+                        }
+                    }
+                }
+            }
+
+            public Object[] finalise()
+            {
+                return processed.ToArray();
+            }
+        }
+	}
+}
+"@
+
 Function Get-DateDiff
 {
 <#
@@ -2635,7 +3414,7 @@ Function Get-AADRUser
 
     If ($Method -eq 'MSGraph')
     {
-        $AzureADUsers = @( Get-MgUser -All -Property accountEnabled, assignedLicenses, createdDateTime, department, displayName, jobTitle, mobilePhone, telephone, userPrincipalName, userType, signInActivity, createdDateTime, lastPasswordChangeDateTime -PageSize $Pagesize)
+        $AzureADUsers = @( Get-MgUser -All -Property accountEnabled, assignedLicenses, createdDateTime, department, displayName, jobTitle, mobilePhone, Id, telephone, userPrincipalName, userType, signInActivity, createdDateTime, lastPasswordChangeDateTime -PageSize $Pagesize)
         If($AzureADUsers)
         {
             $ProcessedUserCount = 0
@@ -2694,7 +3473,7 @@ Function Get-AADRUser
                 $MFAPhone = "-"
                 $MicrosoftAuthenticatorDevice = "-"
                 Write-Progress -Activity "`n Processed users count: $ProcessedUserCount Currently processing user: $($_.DisplayName)`n"
-                [array]$MFAData = Get-MgUserAuthenticationMethod -UserId $_.UserPrincipalName
+                [array]$MFAData = Get-MgUserAuthenticationMethod -UserId $_.Id
                 $AuthenticationMethod = @()
                 $AdditionalDetails = @()
 
@@ -2871,6 +3650,10 @@ Function Get-AADRDirectoryRole
     [string]
     Which method to use; AzureAD.
 
+.PARAMETER PageSize
+    [int]
+    The PageSize to set for the MSGraph query. Default 200.
+
 .PARAMETER Threads
     [int]
     The number of threads to use during processing of objects. Default 10.
@@ -2882,6 +3665,9 @@ Function Get-AADRDirectoryRole
         [Parameter(Mandatory = $true)]
         [string] $Method,
 
+        [Parameter(Mandatory = $true)]
+        [int] $PageSize = 200,
+
         [Parameter(Mandatory = $false)]
         [int] $Threads = 10
     )
@@ -2891,7 +3677,28 @@ Function Get-AADRDirectoryRole
         $AADRDirectoryRoles = @( Get-AzureADDirectoryRole )
         If ($AADRDirectoryRoles)
         {
+            Write-Verbose "[*] Total DirectoryRoles: $($AADRDirectoryRoles.Count)"
             $AADRDirectoryRolesObj = [AADRecon.AzureADClass]::DirectoryRoleParser($AADRDirectoryRoles, $Threads)
+        }
+    }
+
+    If ($Method -eq 'MSGraph')
+    {
+        $AADRDirectoryRoles = @( Get-MgDirectoryRole -All -PageSize $Pagesize)
+        If ($AADRDirectoryRoles)
+        {
+            Write-Verbose "[*] Total DirectoryRoles: $($AADRDirectoryRoles.Count)"
+            $AADRDirectoryRolesObj = @()
+            $AADRDirectoryRoles | ForEach-Object {
+                # Create the object for each instance.
+                $Obj = New-Object PSObject
+                $Obj | Add-Member -MemberType NoteProperty -Name "DisplayName" -Value $([string] $_.DisplayName)
+                $Obj | Add-Member -MemberType NoteProperty -Name "Description" -Value $([string] $_.Description)
+                $Obj | Add-Member -MemberType NoteProperty -Name "Id" -Value $([string] $_.Id)
+                $Obj | Add-Member -MemberType NoteProperty -Name "RoleTemplateId" -Value $([string] $_.RoleTemplateId)
+                $AADRDirectoryRolesObj += $Obj
+            }
+            Remove-Variable AADRDirectoryRoles
         }
     }
 
@@ -2918,6 +3725,10 @@ Function Get-AADRDirectoryRoleMember
     [string]
     Which method to use; AzureAD.
 
+.PARAMETER PageSize
+    [int]
+    The PageSize to set for the MSGraph query. Default 200.
+
 .PARAMETER Threads
     [int]
     The number of threads to use during processing of objects. Default 10.
@@ -2928,6 +3739,9 @@ Function Get-AADRDirectoryRoleMember
     param(
         [Parameter(Mandatory = $true)]
         [string] $Method,
+
+        [Parameter(Mandatory = $true)]
+        [int] $PageSize = 200,
 
         [Parameter(Mandatory = $false)]
         [int] $Threads = 10
@@ -2951,6 +3765,41 @@ Function Get-AADRDirectoryRoleMember
                         $Obj | Add-Member -MemberType NoteProperty -Name MemberName -Value $([AADRecon.AzureADClass]::CleanString($_.DisplayName))
                         $Obj | Add-Member -MemberType NoteProperty -Name MemberUserPrincipalName -Value $([AADRecon.AzureADClass]::CleanString($_.UserPrincipalName))
                         $AADRDirectoryRoleMemberObj += $Obj
+                    }
+                }
+            }
+        }
+    }
+
+    If ($Method -eq 'MSGraph') {
+        $AADRDirectoryRoles = @( Get-MgDirectoryRole -All -PageSize $Pagesize)
+        If ($AADRDirectoryRoles) {
+            If ($AADRDirectoryRoles) {
+                $AADRDirectoryRoleMemberObj = @()
+                $AADRDirectoryRoles | ForEach-Object {
+                    $AADRDirectoryRoleMember = Get-MgDirectoryRoleMember -DirectoryRoleId $_.Id
+                    $DirectoryRoleName = $([AADRecon.AzureADClass]::CleanString($_.DisplayName))
+                    If ($AADRDirectoryRoleMember) {
+                        $AADRDirectoryRoleMember | ForEach-Object {
+                            # Create the object for each instance.
+                            $Obj = New-Object PSObject
+                            $Obj | Add-Member -MemberType NoteProperty -Name DirectoryRole -Value $DirectoryRoleName
+                            If ($_.AdditionalProperties."@odata.type" -eq "#microsoft.graph.user")
+                            {
+                                $UserDetails = Get-MgUser -UserId $_.Id
+                                $Obj | Add-Member -MemberType NoteProperty -Name MemberName -Value $([AADRecon.AzureADClass]::CleanString($UserDetails.DisplayName))
+                                $Obj | Add-Member -MemberType NoteProperty -Name MemberUserPrincipalName -Value $([AADRecon.AzureADClass]::CleanString($UserDetails.UserPrincipalName))
+                                $Obj | Add-Member -MemberType NoteProperty -Name Type -Value "User"
+                                $AADRDirectoryRoleMemberObj += $Obj
+                            }
+                            If ($_.AdditionalProperties."@odata.type" -eq "#microsoft.graph.group") {
+                                $GroupDetails = Get-MgGroup -GroupId $_.Id
+                                $Obj | Add-Member -MemberType NoteProperty -Name MemberName -Value $([AADRecon.AzureADClass]::CleanString($GroupDetails.DisplayName))
+                                $Obj | Add-Member -MemberType NoteProperty -Name MemberUserPrincipalName -Value ""
+                                $Obj | Add-Member -MemberType NoteProperty -Name Type -Value "Group"
+                                $AADRDirectoryRoleMemberObj += $Obj
+                            }
+                        }
                     }
                 }
             }
@@ -3119,6 +3968,34 @@ Function Get-AADRDevice
         {
             Write-Verbose "[*] Total Devices: $([AADRecon.AzureADClass]::ObjectCount($AADRDevices))"
             $AADRDevicesObj = [AADRecon.AzureADClass]::DeviceParser($AADRDevices, $Threads)
+        }
+    }
+
+    If ($Method -eq 'MSGraph') {
+        $AADRDevices = @( Get-MgDevice -All )
+        If ($AADRDevices) {
+            Write-Verbose "[*] Total Devices: $([AADRecon.AzureADClass]::ObjectCount($AADRDevices))"
+            $AADRDevicesObj = @()
+            $AADRDevices | ForEach-Object {
+                # Create the object for each instance.
+                $Obj = New-Object PSObject
+                $Obj | Add-Member -MemberType NoteProperty -Name "DisplayName" -Value $([string] $_.DisplayName)
+                $Obj | Add-Member -MemberType NoteProperty -Name "AccountEnabled" -Value $([string] $_.AccountEnabled)
+                $Obj | Add-Member -MemberType NoteProperty -Name "OnPremisesSyncEnabled" -Value $([string] $_.OnPremisesSyncEnabled)
+                $Obj | Add-Member -MemberType NoteProperty -Name "OnPremisesLastSyncDateTime" -Value $([string] $_.OnPremisesLastSyncDateTime)
+                $Obj | Add-Member -MemberType NoteProperty -Name "OperatingSystem" -Value $([string] $_.OperatingSystem)
+                $Obj | Add-Member -MemberType NoteProperty -Name "OperatingSystemVersion" -Value $([string] $_.OperatingSystemVersion)
+                $Obj | Add-Member -MemberType NoteProperty -Name "ApproximateLastSignInDateTime" -Value $([string] $_.ApproximateLastSignInDateTime)
+                $Obj | Add-Member -MemberType NoteProperty -Name "TrustType" -Value $([string] $_.TrustType)
+                $Obj | Add-Member -MemberType NoteProperty -Name "ProfileType" -Value $([string] $_.ProfileType)
+                $Obj | Add-Member -MemberType NoteProperty -Name "IsManaged" -Value $([string] $_.IsManaged)
+                $Obj | Add-Member -MemberType NoteProperty -Name "DeviceOwnership" -Value $([string] $_.DeviceOwnership)
+                $Obj | Add-Member -MemberType NoteProperty -Name "EnrollmentProfileName" -Value $([string] $_.EnrollmentProfileName)
+                $Obj | Add-Member -MemberType NoteProperty -Name "IsCompliant" -Value $([string] $_.IsCompliant)
+                $Obj | Add-Member -MemberType NoteProperty -Name "DeviceId" -Value $([string] $_.DeviceId)
+                $AADRDevicesObj += $Obj
+            }
+            Remove-Variable AADRDevices
         }
     }
 
@@ -3581,6 +4458,38 @@ Function Invoke-AzureADRecon
             Remove-Variable AzureADModulePath
             Remove-Variable CLR
         }
+        If ($Method -eq 'MSGraph') {
+            #$AzureADModulePath = (Get-Module -ListAvailable AzureAD).path | Split-Path
+            $CLR = ([System.Reflection.Assembly]::GetExecutingAssembly().ImageRuntimeVersion)[1]
+            If ($PSVersionTable.PSEdition -eq "Core") {
+                $refFolder = Join-Path -Path (Split-Path([PSObject].Assembly.Location)) -ChildPath "ref"
+                Add-Type -TypeDefinition $($MSGraphSource) -ReferencedAssemblies ([System.String[]]@(
+                    (Join-Path -Path $refFolder -ChildPath "System.Collections.dll")
+                    (Join-Path -Path $refFolder -ChildPath "System.Collections.NonGeneric.dll")
+                    (Join-Path -Path $refFolder -ChildPath "System.Threading.dll")
+                    (Join-Path -Path $refFolder -ChildPath "System.Threading.Thread.dll")
+                    (Join-Path -Path $refFolder -ChildPath "mscorlib.dll")
+                    #([System.Reflection.Assembly]::LoadWithPartialName("mscorlib")).Location
+                    ([System.Reflection.Assembly]::LoadWithPartialName("System.Linq")).Location
+                    ([System.Reflection.Assembly]::LoadWithPartialName("System.Console")).Location
+                    ([System.Reflection.Assembly]::LoadWithPartialName("System.ComponentModel.DataAnnotations")).Location
+                    ([System.Reflection.Assembly]::LoadWithPartialName("System.Management.Automation")).Location
+                    ))
+                Remove-Variable refFolder
+            }
+            If ($CLR -eq "4") {
+                Add-Type -TypeDefinition $($MSGraphSource) -ReferencedAssemblies ([System.String[]]@(
+                    ([System.Reflection.Assembly]::LoadWithPartialName("System.ComponentModel.DataAnnotations")).Location
+                    ))
+            }
+            Else {
+                Add-Type -TypeDefinition $($MSGraphSource) -ReferencedAssemblies ([System.String[]]@(
+                    ([System.Reflection.Assembly]::LoadWithPartialName("System.ComponentModel.DataAnnotations")).Location
+                    ))
+            }
+            #Remove-Variable AzureADModulePath
+            Remove-Variable CLR
+        }
     }
     Catch
     {
@@ -3975,7 +4884,7 @@ Function Invoke-AzureADRecon
     If ($AADRDirectoryRoles)
     {
         Write-Output "[-] Directory Role"
-        $AADRObject = Get-AADRDirectoryRole -Method $Method -Threads $Threads
+        $AADRObject = Get-AADRDirectoryRole -Method $Method -PageSize $PageSize -Threads $Threads
         If ($AADRObject)
         {
             Export-ADR -ADRObj $AADRObject -AADROutputDir $AADROutputDir -OutputType $OutputType -ADRModuleName "DirectoryRoles"
@@ -3986,7 +4895,7 @@ Function Invoke-AzureADRecon
     If ($AADRDirectoryRoleMembers)
     {
         Write-Output "[-] Directory Role Membership - May take some time"
-        $AADRObject = Get-AADRDirectoryRoleMember -Method $Method -Threads $Threads
+        $AADRObject = Get-AADRDirectoryRoleMember -Method $Method -PageSize $PageSize -Threads $Threads
         If ($AADRObject)
         {
             Export-ADR -ADRObj $AADRObject -AADROutputDir $AADROutputDir -OutputType $OutputType -ADRModuleName "DirectoryRoleMembers"
