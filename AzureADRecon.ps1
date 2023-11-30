@@ -48,7 +48,7 @@
     powershell.exe -nologo -executionpolicy bypass -noprofile -file AzureADRecon.ps1
 
 .PARAMETER Method
-	Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts)
+	Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts).
 
 .PARAMETER Credential
 	Domain Credentials.
@@ -1231,7 +1231,7 @@ namespace AADRecon
                     PSObject AzureADTenantObj = new PSObject();
                     int icount = 0;
 
-                    //List<Microsoft.Open.AzureAD.Model.VerifiedDomain> VerifiedDomainsList = new List<Microsoft.Open.AzureAD.Model.VerifiedDomain>();
+                    //List<Microsoft.Azure.PowerShell.Cmdlets.Resources.MSGraph.Models.ApiV10.IMicrosoftGraphVerifiedDomain> VerifiedDomainsList = new List<Microsoft.Azure.PowerShell.Cmdlets.Resources.MSGraph.Models.ApiV10.IMicrosoftGraphVerifiedDomain>();
                     List<string> TechnicalNotificationMailsList = new List<string>();
                     //List<Microsoft.Open.AzureAD.Model.AssignedPlan> AssignedPlanList = new List<Microsoft.Open.AzureAD.Model.AssignedPlan>();
                     //int count = 0;
@@ -1362,11 +1362,11 @@ namespace AADRecon
                 {
                     PSObject AzureADDomain = (PSObject) record;
 
-                    List<string> SupportedServicesList = new List<string>();
+                    //List<string> SupportedServicesList = new List<string>();
                     string SupportedServices = null;
 
                     PSObject AzureADDomainObj = new PSObject();
-                    AzureADDomainObj.Members.Add(new PSNoteProperty("Name", CleanString(AzureADDomain.Members["Name"].Value)));
+                    AzureADDomainObj.Members.Add(new PSNoteProperty("Id", CleanString(AzureADDomain.Members["Id"].Value)));
                     AzureADDomainObj.Members.Add(new PSNoteProperty("AuthenticationType", AzureADDomain.Members["authenticationType"].Value));
                     AzureADDomainObj.Members.Add(new PSNoteProperty("AvailabilityStatus", AzureADDomain.Members["availabilityStatus"].Value));
                     AzureADDomainObj.Members.Add(new PSNoteProperty("isAdminManaged", AzureADDomain.Members["isAdminManaged"].Value));
@@ -1375,19 +1375,17 @@ namespace AADRecon
                     AzureADDomainObj.Members.Add(new PSNoteProperty("isRoot", AzureADDomain.Members["isRoot"].Value));
                     AzureADDomainObj.Members.Add(new PSNoteProperty("isVerified", AzureADDomain.Members["isVerified"].Value));
 
-                    if (((List<string>) AzureADDomain.Members["SupportedServices"].Value).Count != 0)
+                    foreach (string value in (string[]) AzureADDomain.Members["SupportedServices"].Value)
                     {
-                        SupportedServicesList = (List<string>) AzureADDomain.Members["SupportedServices"].Value;
-                        foreach (string value in SupportedServicesList)
-                        {
-                            SupportedServices = SupportedServices + "," + value;
-                        }
-                        SupportedServices = SupportedServices.TrimStart(',');
+                        SupportedServices = SupportedServices + "," + value;
                     }
+                    SupportedServices = SupportedServices.TrimStart(',');
                     AzureADDomainObj.Members.Add(new PSNoteProperty("SupportedServices", SupportedServices));
 
-                    AzureADDomainObj.Members.Add(new PSNoteProperty("ForceDeleteState", AzureADDomain.Members["ForceDeleteState"].Value));
-                    AzureADDomainObj.Members.Add(new PSNoteProperty("State", AzureADDomain.Members["State"].Value));
+                    //AzureADDomainObj.Members.Add(new PSNoteProperty("SupportedServices", AzureADDomain.Members["SupportedServices"].Value));
+
+                    //AzureADDomainObj.Members.Add(new PSNoteProperty("ForceDeleteState", AzureADDomain.Members["ForceDeleteState"].Value));
+                    //AzureADDomainObj.Members.Add(new PSNoteProperty("State", AzureADDomain.Members["State"].Value));
                     return new PSObject[] { AzureADDomainObj };
                 }
                 catch (Exception e)
@@ -1609,11 +1607,11 @@ namespace AADRecon
 
                     PSObject AzureADDirectoryRoleObj = new PSObject();
                     AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("DisplayName", CleanString(AzureADDirectoryRole.Members["DisplayName"].Value)));
-                    AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("RoleDisabled", AzureADDirectoryRole.Members["RoleDisabled"].Value));
-                    AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("IsSystem", AzureADDirectoryRole.Members["IsSystem"].Value));
+                    //AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("RoleDisabled", AzureADDirectoryRole.Members["RoleDisabled"].Value));
+                    //AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("IsSystem", AzureADDirectoryRole.Members["IsSystem"].Value));
                     AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("Description", CleanString(AzureADDirectoryRole.Members["Description"].Value)));
+                    AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("Id", AzureADDirectoryRole.Members["Id"].Value));
                     AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("RoleTemplateId", AzureADDirectoryRole.Members["RoleTemplateId"].Value));
-                    AzureADDirectoryRoleObj.Members.Add(new PSNoteProperty("ObjectId", AzureADDirectoryRole.Members["ObjectId"].Value));
                     return new PSObject[] { AzureADDirectoryRoleObj };
                 }
                 catch (Exception e)
@@ -1634,12 +1632,11 @@ namespace AADRecon
 
                     PSObject AzureADGroupObj = new PSObject();
                     AzureADGroupObj.Members.Add(new PSNoteProperty("DisplayName", CleanString(AzureADGroup.Members["DisplayName"].Value)));
-                    AzureADGroupObj.Members.Add(new PSNoteProperty("DirSyncEnabled", AzureADGroup.Members["DirSyncEnabled"].Value));
-                    AzureADGroupObj.Members.Add(new PSNoteProperty("LastDirSyncTime", AzureADGroup.Members["LastDirSyncTime"].Value));
+                    AzureADGroupObj.Members.Add(new PSNoteProperty("OnPremisesSyncEnabled", AzureADGroup.Members["OnPremisesSyncEnabled"].Value));
+                    AzureADGroupObj.Members.Add(new PSNoteProperty("OnPremisesLastSyncDateTime", AzureADGroup.Members["OnPremisesLastSyncDateTime"].Value));
                     AzureADGroupObj.Members.Add(new PSNoteProperty("OnPremisesSecurityIdentifier", AzureADGroup.Members["OnPremisesSecurityIdentifier"].Value));
                     AzureADGroupObj.Members.Add(new PSNoteProperty("SecurityEnabled", AzureADGroup.Members["SecurityEnabled"].Value));
                     AzureADGroupObj.Members.Add(new PSNoteProperty("Description", CleanString(AzureADGroup.Members["Description"].Value)));
-                    AzureADGroupObj.Members.Add(new PSNoteProperty("ObjectId", AzureADGroup.Members["ObjectId"].Value));
                     return new PSObject[] { AzureADGroupObj };
                 }
                 catch (Exception e)
@@ -1661,15 +1658,18 @@ namespace AADRecon
                     PSObject AzureADDeviceObj = new PSObject();
                     AzureADDeviceObj.Members.Add(new PSNoteProperty("DisplayName", CleanString(AzureADDevice.Members["DisplayName"].Value)));
                     AzureADDeviceObj.Members.Add(new PSNoteProperty("AccountEnabled", CleanString(AzureADDevice.Members["AccountEnabled"].Value)));
-                    AzureADDeviceObj.Members.Add(new PSNoteProperty("DirSyncEnabled", AzureADDevice.Members["DirSyncEnabled"].Value));
-                    AzureADDeviceObj.Members.Add(new PSNoteProperty("LastDirSyncTime", AzureADDevice.Members["LastDirSyncTime"].Value));
-                    AzureADDeviceObj.Members.Add(new PSNoteProperty("DeviceOSType", AzureADDevice.Members["DeviceOSType"].Value));
-                    AzureADDeviceObj.Members.Add(new PSNoteProperty("DeviceOSVersion", AzureADDevice.Members["DeviceOSVersion"].Value));
-                    AzureADDeviceObj.Members.Add(new PSNoteProperty("ApproximateLastLogonTimeStamp", AzureADDevice.Members["ApproximateLastLogonTimeStamp"].Value));
-                    AzureADDeviceObj.Members.Add(new PSNoteProperty("DeviceTrustType", AzureADDevice.Members["DeviceTrustType"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("OnPremisesSyncEnabled", AzureADDevice.Members["OnPremisesSyncEnabled"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("OnPremisesLastSyncDateTime", AzureADDevice.Members["OnPremisesLastSyncDateTime"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("OperatingSystem", AzureADDevice.Members["OperatingSystem"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("OperatingSystemVersion", AzureADDevice.Members["OperatingSystemVersion"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("ApproximateLastSignInDateTime", AzureADDevice.Members["ApproximateLastSignInDateTime"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("TrustType", AzureADDevice.Members["TrustType"].Value));
                     AzureADDeviceObj.Members.Add(new PSNoteProperty("ProfileType", AzureADDevice.Members["ProfileType"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("IsManaged", AzureADDevice.Members["IsManaged"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("DeviceOwnership", AzureADDevice.Members["DeviceOwnership"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("EnrollmentProfileName", AzureADDevice.Members["EnrollmentProfileName"].Value));
+                    AzureADDeviceObj.Members.Add(new PSNoteProperty("IsCompliant", AzureADDevice.Members["IsCompliant"].Value));
                     AzureADDeviceObj.Members.Add(new PSNoteProperty("DeviceId", AzureADDevice.Members["DeviceId"].Value));
-                    AzureADDeviceObj.Members.Add(new PSNoteProperty("ObjectId", AzureADDevice.Members["ObjectId"].Value));
                     return new PSObject[] { AzureADDeviceObj };
                 }
                 catch (Exception e)
@@ -3144,7 +3144,7 @@ Function Get-AADRTenant
 
 .PARAMETER Method
     [string]
-    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts)
+    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts).
 
 .PARAMETER Threads
     [int]
@@ -3221,7 +3221,8 @@ Function Get-AADRTenant
                     $AADRTenantObj += $Obj
                 }
 
-                For ($i = 0; $i -lt $_.AssignedPlans.Count; $i++) {
+                For ($i = 0; $i -lt $_.AssignedPlans.Count; $i++)
+                {
 
                     $ObjValues = @("AssignedPlan($i) - AssignedTimestamp", [datetime] $_.AssignedPlans[$i].AssignedDateTime, "AssignedPlan($i) - CapabilityStatus", [string] $_.AssignedPlans[$i].CapabilityStatus, "AssignedPlan($i) - Service", [string] $_.AssignedPlans[$i].Service, "AssignedPlan($i) - ServicePlanId", [bool] $_.AssignedPlans[$i].ServicePlanId)
 
@@ -3260,7 +3261,7 @@ Function Get-AADRDomain
 
 .PARAMETER Method
     [string]
-    Which method to use; AzureAD.
+    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts).
 
 .PARAMETER Threads
     [int]
@@ -3283,6 +3284,17 @@ Function Get-AADRDomain
         If ($AADRDomain)
         {
             $AADRDomainObj = [AADRecon.AzureADClass]::DomainParser($AADRDomain, $Threads)
+            Remove-Variable AADRDomain
+        }
+    }
+
+    If ($Method -eq 'MSGraph')
+    {
+        $AADRDomain = @( Get-MgDomain )
+        If ($AADRDomain)
+        {
+            $AADRDomainObj = [AADRecon.AzureADClass]::DomainParser($AADRDomain, $Threads)
+            Remove-Variable AADRDomain
         }
     }
 
@@ -3354,7 +3366,7 @@ Function Get-AADRUser
 
 .PARAMETER Method
     [string]
-    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts)
+    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts).
 
 .PARAMETER date
     [DateTime]
@@ -3647,7 +3659,7 @@ Function Get-AADRDirectoryRole
 
 .PARAMETER Method
     [string]
-    Which method to use; AzureAD.
+    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts).
 
 .PARAMETER PageSize
     [int]
@@ -3688,16 +3700,7 @@ Function Get-AADRDirectoryRole
         If ($AADRDirectoryRoles)
         {
             Write-Verbose "[*] Total DirectoryRoles: $($AADRDirectoryRoles.Count)"
-            $AADRDirectoryRolesObj = @()
-            $AADRDirectoryRoles | ForEach-Object {
-                # Create the object for each instance.
-                $Obj = New-Object PSObject
-                $Obj | Add-Member -MemberType NoteProperty -Name "DisplayName" -Value $([string] $_.DisplayName)
-                $Obj | Add-Member -MemberType NoteProperty -Name "Description" -Value $([string] $_.Description)
-                $Obj | Add-Member -MemberType NoteProperty -Name "Id" -Value $([string] $_.Id)
-                $Obj | Add-Member -MemberType NoteProperty -Name "RoleTemplateId" -Value $([string] $_.RoleTemplateId)
-                $AADRDirectoryRolesObj += $Obj
-            }
+            $AADRDirectoryRolesObj = [AADRecon.AzureADClass]::DirectoryRoleParser($AADRDirectoryRoles, $Threads)
             Remove-Variable AADRDirectoryRoles
         }
     }
@@ -3723,7 +3726,7 @@ Function Get-AADRDirectoryRoleMember
 
 .PARAMETER Method
     [string]
-    Which method to use; AzureAD.
+    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts).
 
 .PARAMETER PageSize
     [int]
@@ -3771,12 +3774,15 @@ Function Get-AADRDirectoryRoleMember
             }
             Remove-Variable AADRDirectoryRoles
             Remove-Variable AADRDirectoryRoleMember
+            Remove-Variable DirectoryRoleName
         }
     }
 
-    If ($Method -eq 'MSGraph') {
+    If ($Method -eq 'MSGraph')
+    {
         $AADRDirectoryRoles = @( Get-MgDirectoryRole -All -PageSize $Pagesize)
-        If ($AADRDirectoryRoles) {
+        If ($AADRDirectoryRoles)
+        {
             $ProcessedDirectoryRoleCount = 0
             Write-Verbose "[*] Total DirectoryRoles: $($AADRDirectoryRoles.Count)"
             $AADRDirectoryRoleMemberObj = @()
@@ -3784,7 +3790,8 @@ Function Get-AADRDirectoryRoleMember
                 $ProcessedDirectoryRoleCount++
                 $AADRDirectoryRoleMember = Get-MgDirectoryRoleMember -DirectoryRoleId $_.Id
                 $DirectoryRoleName = $([AADRecon.AzureADClass]::CleanString($_.DisplayName))
-                If ($AADRDirectoryRoleMember) {
+                If ($AADRDirectoryRoleMember)
+                {
                     $AADRDirectoryRoleMember | ForEach-Object {
                         # Create the object for each instance.
                         $Obj = New-Object PSObject
@@ -3797,7 +3804,8 @@ Function Get-AADRDirectoryRoleMember
                             $Obj | Add-Member -MemberType NoteProperty -Name Type -Value "User"
                             $AADRDirectoryRoleMemberObj += $Obj
                         }
-                        If ($_.AdditionalProperties."@odata.type" -eq "#microsoft.graph.group") {
+                        If ($_.AdditionalProperties."@odata.type" -eq "#microsoft.graph.group")
+                        {
                             $GroupDetails = Get-MgGroup -GroupId $_.Id
                             $Obj | Add-Member -MemberType NoteProperty -Name MemberName -Value $([AADRecon.AzureADClass]::CleanString($GroupDetails.DisplayName))
                             $Obj | Add-Member -MemberType NoteProperty -Name MemberUserPrincipalName -Value ""
@@ -3809,9 +3817,10 @@ Function Get-AADRDirectoryRoleMember
                 }
             }
             Write-Progress -Activity "Processed DirectoryRole" -Completed
+            Remove-Variable ProcessedDirectoryRoleCount
             Remove-Variable AADRDirectoryRoles
-            Remove-Variable DirectoryRoleName
             Remove-Variable AADRDirectoryRoleMember
+            Remove-Variable DirectoryRoleName
         }
     }
 
@@ -3836,7 +3845,11 @@ Function Get-AADRGroup
 
 .PARAMETER Method
     [string]
-    Which method to use; AzureAD.
+    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts).
+
+.PARAMETER PageSize
+    [int]
+    The PageSize to set for the MSGraph query. Default 200.
 
 .PARAMETER date
     [DateTime]
@@ -3856,6 +3869,9 @@ Function Get-AADRGroup
         [Parameter(Mandatory = $true)]
         [DateTime] $date,
 
+        [Parameter(Mandatory = $true)]
+        [int] $PageSize = 200,
+
         [Parameter(Mandatory = $false)]
         [int] $Threads = 10
     )
@@ -3867,6 +3883,18 @@ Function Get-AADRGroup
         {
             Write-Verbose "[*] Total Groups: $([AADRecon.AzureADClass]::ObjectCount($AADRGroups))"
             $AADRGroupsObj = [AADRecon.AzureADClass]::GroupParser($AADRGroups, $Threads)
+            Remove-Variable AADRGroups
+        }
+    }
+
+    If ($Method -eq 'MSGraph')
+    {
+        $AADRGroups = @( Get-MgGroup -All -PageSize $PageSize )
+        If($AADRGroups)
+        {
+            Write-Verbose "[*] Total Groups: $([AADRecon.AzureADClass]::ObjectCount($AADRGroups))"
+            $AADRGroupsObj = [AADRecon.AzureADClass]::GroupParser($AADRGroups, $Threads)
+            Remove-Variable AADRGroups
         }
     }
 
@@ -3891,7 +3919,11 @@ Function Get-AADRGroupMember
 
 .PARAMETER Method
     [string]
-    Which method to use; AzureAD.
+    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts).
+
+.PARAMETER PageSize
+    [int]
+    The PageSize to set for the MSGraph query. Default 200.
 
 .PARAMETER Threads
     [int]
@@ -3904,6 +3936,9 @@ Function Get-AADRGroupMember
         [Parameter(Mandatory = $true)]
         [string] $Method,
 
+        [Parameter(Mandatory = $true)]
+        [int] $PageSize = 200,
+
         [Parameter(Mandatory = $false)]
         [int] $Threads = 10
     )
@@ -3913,8 +3948,11 @@ Function Get-AADRGroupMember
         $AADRGroups = @( Get-AzureADGroup -All $true )
         If ($AADRGroups)
         {
+            $ProcessedGroupCount = 0
+            Write-Verbose "[*] Total Groups: $([AADRecon.AzureADClass]::ObjectCount($AADRGroups))"
             $AADRGroupMemberObj = @()
             $AADRGroups | ForEach-Object {
+                $ProcessedGroupCount++
                 $AADRGroupMemberMember = Get-AzureADGroupMember -ObjectId $_.ObjectId
                 $GroupName = $([AADRecon.AzureADClass]::CleanString($_.DisplayName))
                 If ($AADRGroupMemberMember)
@@ -3928,7 +3966,44 @@ Function Get-AADRGroupMember
                         $AADRGroupMemberObj += $Obj
                     }
                 }
+                Write-Progress -Activity "`n Processed Group count: $ProcessedGroupCount Currently processing: $($GroupName)`n"
             }
+            Write-Progress -Activity "Processed Group" -Completed
+            Remove-Variable AADRGroups
+            Remove-Variable AADRGroupMemberMember
+            Remove-Variable GroupName
+        }
+    }
+
+    If ($Method -eq 'MSGraph')
+    {
+        $AADRGroups = @( Get-MgGroup -All -PageSize $PageSize )
+        If($AADRGroups)
+        {
+            $ProcessedGroupCount = 0
+            Write-Verbose "[*] Total Groups: $([AADRecon.AzureADClass]::ObjectCount($AADRGroups))"
+            $AADRGroupMemberObj = @()
+            $AADRGroups | ForEach-Object {
+                $ProcessedGroupCount++
+                $AADRGroupMemberMember = Get-MgGroupMember -GroupId $_.Id
+                $GroupName = $([AADRecon.AzureADClass]::CleanString($_.DisplayName))
+                If ($AADRGroupMemberMember)
+                {
+                    $AADRGroupMemberMember | ForEach-Object {
+                        # Create the object for each instance.
+                        $Obj = New-Object PSObject
+                        $Obj | Add-Member -MemberType NoteProperty -Name GroupName -Value $GroupName
+                        $Obj | Add-Member -MemberType NoteProperty -Name MemberName -Value $([AADRecon.AzureADClass]::CleanString($_.AdditionalProperties.displayName))
+                        $Obj | Add-Member -MemberType NoteProperty -Name MemberUserPrincipalName -Value $([AADRecon.AzureADClass]::CleanString($_.AdditionalProperties.userPrincipalName))
+                        $AADRGroupMemberObj += $Obj
+                    }
+                }
+                Write-Progress -Activity "`n Processed Group count: $ProcessedGroupCount Currently processing: $($GroupName)`n"
+            }
+            Write-Progress -Activity "Processed Group" -Completed
+            Remove-Variable AADRGroups
+            Remove-Variable AADRGroupMemberMember
+            Remove-Variable GroupName
         }
     }
 
@@ -3980,10 +4055,14 @@ Function Get-AADRDevice
         }
     }
 
-    If ($Method -eq 'MSGraph') {
+    If ($Method -eq 'MSGraph')
+    {
         $AADRDevices = @( Get-MgDevice -All )
-        If ($AADRDevices) {
+        If ($AADRDevices)
+        {
             Write-Verbose "[*] Total Devices: $([AADRecon.AzureADClass]::ObjectCount($AADRDevices))"
+            $AADRDevicesObj = [AADRecon.AzureADClass]::DeviceParser($AADRDevices, $Threads)
+            <#
             $AADRDevicesObj = @()
             $AADRDevices | ForEach-Object {
                 # Create the object for each instance.
@@ -4004,6 +4083,7 @@ Function Get-AADRDevice
                 $Obj | Add-Member -MemberType NoteProperty -Name "DeviceId" -Value $([string] $_.DeviceId)
                 $AADRDevicesObj += $Obj
             }
+            #>
             Remove-Variable AADRDevices
         }
     }
@@ -4368,7 +4448,8 @@ Function Invoke-AzureADRecon
         }
     }
 
-    If ($PSVersionTable.Platform -ne "Win32NT") {
+    If ($PSVersionTable.Platform -ne "Win32NT")
+    {
         $RanonComputer = "$([Environment]::MachineName)"
     }
     Else
@@ -4467,10 +4548,12 @@ Function Invoke-AzureADRecon
             Remove-Variable AzureADModulePath
             Remove-Variable CLR
         }
-        If ($Method -eq 'MSGraph') {
+        If ($Method -eq 'MSGraph')
+        {
             #$AzureADModulePath = (Get-Module -ListAvailable AzureAD).path | Split-Path
             $CLR = ([System.Reflection.Assembly]::GetExecutingAssembly().ImageRuntimeVersion)[1]
-            If ($PSVersionTable.PSEdition -eq "Core") {
+            If ($PSVersionTable.PSEdition -eq "Core")
+            {
                 $refFolder = Join-Path -Path (Split-Path([PSObject].Assembly.Location)) -ChildPath "ref"
                 Add-Type -TypeDefinition $($MSGraphSource) -ReferencedAssemblies ([System.String[]]@(
                     (Join-Path -Path $refFolder -ChildPath "System.Collections.dll")
@@ -4486,12 +4569,14 @@ Function Invoke-AzureADRecon
                     ))
                 Remove-Variable refFolder
             }
-            If ($CLR -eq "4") {
+            If ($CLR -eq "4")
+            {
                 Add-Type -TypeDefinition $($MSGraphSource) -ReferencedAssemblies ([System.String[]]@(
                     ([System.Reflection.Assembly]::LoadWithPartialName("System.ComponentModel.DataAnnotations")).Location
                     ))
             }
-            Else {
+            Else
+            {
                 Add-Type -TypeDefinition $($MSGraphSource) -ReferencedAssemblies ([System.String[]]@(
                     ([System.Reflection.Assembly]::LoadWithPartialName("System.ComponentModel.DataAnnotations")).Location
                     ))
@@ -4728,14 +4813,16 @@ Function Invoke-AzureADRecon
             $Scopes = "AuditLog.Read.All, User.Read.All, UserAuthenticationMethod.Read.All"
 
             $ADFileName = -join ($returndir, '\', 'MSGraph-Credentials.csv')
-            If (Test-Path $ADFileName) {
+            If (Test-Path $ADFileName)
+            {
                 $CredsObj = Import-CSV -Path $ADFileName
                 Remove-Variable ADFileName
                 If (-Not ([string]::IsNullOrEmpty($CredsObj[0].Value)) )
                 {
                     $TenantID = $CredsObj[0].Value
                 }
-                If (-Not ([string]::IsNullOrEmpty($CredsObj[1].Value)) ) {
+                If (-Not ([string]::IsNullOrEmpty($CredsObj[1].Value)) )
+                {
                     $ClientID = $CredsObj[1].Value
                 }
                 If (-Not ([string]::IsNullOrEmpty($CredsObj[2].Value)) )
@@ -4748,11 +4835,13 @@ Function Invoke-AzureADRecon
                     $CertificateThumbprint = $CredsObj[3].Value
                     $CertThumbprint = $true
                 }
-                If (-Not ([string]::IsNullOrEmpty($CredsObj[4].Value)) ) {
+                If (-Not ([string]::IsNullOrEmpty($CredsObj[4].Value)) )
+                {
                     $CertificateName = $CredsObj[4].Value
                     $CertName = $true
                 }
-                If (-Not ([string]::IsNullOrEmpty($CredsObj[5].Value)) ) {
+                If (-Not ([string]::IsNullOrEmpty($CredsObj[5].Value)) )
+                {
                     $Certificate = Get-ChildItem Cert:\LocalMachine\My\$CredsObj[5].Value
                     $CertAuth = $true
                 }
@@ -4801,7 +4890,8 @@ Function Invoke-AzureADRecon
                 Remove-Variable TenantID
                 Remove-Variable CertName
             }
-            ElseIf ($CertAuth) {
+            ElseIf ($CertAuth)
+            {
                 Connect-MgGraph -ClientId $ClientID -TenantId $TenantID -Certificate $Certificate -Scopes $Scopes | Out-Null
                 Remove-Variable ClientID
                 Remove-Variable Certificate
@@ -4915,7 +5005,7 @@ Function Invoke-AzureADRecon
     If ($AADRGroups)
     {
         Write-Output "[-] Groups - May take some time"
-        $AADRObject = Get-AADRGroup -Method $Method -date $date -Threads $Threads
+        $AADRObject = Get-AADRGroup -Method $Method -date $date -PageSize $PageSize -Threads $Threads
         If ($AADRObject)
         {
             Export-ADR -ADRObj $AADRObject -AADROutputDir $AADROutputDir -OutputType $OutputType -ADRModuleName "Groups"
@@ -4926,7 +5016,7 @@ Function Invoke-AzureADRecon
     If ($AADRGroupMembers)
     {
         Write-Output "[-] Group Membership - May take some time"
-        $AADRObject = Get-AADRGroupMember -Method $Method -Threads $Threads
+        $AADRObject = Get-AADRGroupMember -Method $Method -PageSize $PageSize -Threads $Threads
         If ($AADRObject)
         {
             Export-ADR -ADRObj $AADRObject -AADROutputDir $AADROutputDir -OutputType $OutputType -ADRModuleName "GroupMembers"
