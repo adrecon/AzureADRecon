@@ -1375,11 +1375,14 @@ namespace AADRecon
                     AzureADDomainObj.Members.Add(new PSNoteProperty("isRoot", AzureADDomain.Members["isRoot"].Value));
                     AzureADDomainObj.Members.Add(new PSNoteProperty("isVerified", AzureADDomain.Members["isVerified"].Value));
 
-                    foreach (string value in (string[]) AzureADDomain.Members["SupportedServices"].Value)
+                    if (( (string[]) AzureADDomain.Members["SupportedServices"].Value).Length != 0)
                     {
-                        SupportedServices = SupportedServices + "," + value;
+                        foreach (string value in (string[]) AzureADDomain.Members["SupportedServices"].Value)
+                        {
+                            SupportedServices = SupportedServices + "," + value;
+                        }
+                        SupportedServices = SupportedServices.TrimStart(',');
                     }
-                    SupportedServices = SupportedServices.TrimStart(',');
                     AzureADDomainObj.Members.Add(new PSNoteProperty("SupportedServices", SupportedServices));
 
                     //AzureADDomainObj.Members.Add(new PSNoteProperty("SupportedServices", AzureADDomain.Members["SupportedServices"].Value));
