@@ -2936,7 +2936,7 @@ Function Export-ADRExcel
             Get-ADRExcelImport -ADFileName $ADFileName
             Remove-Variable ADFileName
 
-            Get-ADRExcelSort -ColumnName "Group"
+            Get-ADRExcelSort -ColumnName "GroupName"
         }
 
         $ADFileName = -join($ReportPath,'\','Groups.csv')
