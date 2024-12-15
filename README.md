@@ -49,6 +49,11 @@ git clone https://github.com/adrecon/AzureADRecon.git
 
 Otherwise, you can [download a zip archive of the latest release](https://github.com/adrecon/AzureADRecon/archive/master.zip). The intent is to always keep the master branch in a working state.
 
+You can also install the script also with the following command:
+```
+iex (iwr "https://raw.githubusercontent.com/adrecon/AzureADRecon/master/install.ps1" -UseBasicParsing)
+```
+
 ## Usage
 
 ### Examples
