@@ -1925,6 +1925,8 @@ $Header = @"
 th {
 	color:white;
 	background-color:blue;
+	position: sticky;
+	top: 0px;
 }
 td, th {
 	border:0px solid black;
@@ -2859,8 +2861,11 @@ Function Export-ADRExcel
             $returndir = Get-Location
             Set-Location C:\Windows\assembly\
             $refFolder = (Get-ChildItem -Recurse  Microsoft.Office.Interop.Excel.dll).Directory
-            Set-Location $refFolder
-            Add-Type -AssemblyName "Microsoft.Office.Interop.Excel"
+            If ($refFolder)
+            {
+                Set-Location $refFolder
+                Add-Type -AssemblyName "Microsoft.Office.Interop.Excel"
+            }
             Set-Location $returndir
             Remove-Variable returndir
             Remove-Variable refFolder
@@ -3699,7 +3704,7 @@ Function Get-AADRDirectoryRole
 
     If ($Method -eq 'MSGraph')
     {
-        $AADRDirectoryRoles = @( Get-MgDirectoryRole -All -PageSize $Pagesize)
+        $AADRDirectoryRoles = @( Get-MgDirectoryRole -All)
         If ($AADRDirectoryRoles)
         {
             Write-Verbose "[*] Total DirectoryRoles: $($AADRDirectoryRoles.Count)"
@@ -3783,7 +3788,7 @@ Function Get-AADRDirectoryRoleMember
 
     If ($Method -eq 'MSGraph')
     {
-        $AADRDirectoryRoles = @( Get-MgDirectoryRole -All -PageSize $Pagesize)
+        $AADRDirectoryRoles = @( Get-MgDirectoryRole -All)
         If ($AADRDirectoryRoles)
         {
             $ProcessedDirectoryRoleCount = 0
