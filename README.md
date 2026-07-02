@@ -28,12 +28,11 @@ These instructions will get you a copy of the tool up and running on your local 
 * .NET Framework 3.0 or later (Windows 7 includes 3.0)
 * PowerShell
     * PowerShell 2.0 or later (Windows 7 includes 2.0)
-        * AzureAD PowerShell Module (https://www.powershellgallery.com/packages/AzureAD/) Requires PowerShell 3.0 or later
-        * `Install-Module -Name AzureAD`
-    * Limited PowerShell Core support (Tested on PowerShell v7.3.1; Excel generation requires Windows)
         * Microsoft Graph Module (https://www.powershellgallery.com/packages/microsoft.graph)
         * `Install-Module -Name Microsoft.Graph`
         * Scopes required: AuditLog.Read.All, User.Read.All, UserAuthenticationMethod.Read.All
+    * Limited PowerShell Core support (Tested on PowerShell v7.3.1; Excel generation requires Windows)
+
 
 ### Optional
 
@@ -84,7 +83,7 @@ When you run AzureADRecon, a `AzureADRecon-Report-<timestamp>` folder will be cr
 
 ```
 -Method <String>
-    Which method to use; AzureAD (default), MSGraph (default for non-Windows hosts)
+    Which method to use; MSGraph (default)
 
 -Credential <PSCredential>
     Domain Credentials.
