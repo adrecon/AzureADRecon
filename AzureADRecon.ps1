@@ -2246,7 +2246,7 @@ Function Export-ADRExcel
             $ObjAttributes = New-Object System.Collections.Specialized.OrderedDictionary
             $ObjAttributes.Add("UserType", '"Guest"')
 
-            ElseIf ($Method -eq "MSGraph")
+            If ($Method -eq "MSGraph")
             {
                 $ObjAttributes.Add("Password Age (>", '"TRUE"')
                 $ObjAttributes.Add("Never Logged In", '"TRUE"')
@@ -3592,7 +3592,7 @@ Function Invoke-AzureADRecon
         [string] $Logo = "AzureADRecon"
     )
 
-    [string] $AzureADReconVersion = "v0.02"
+    [string] $AzureADReconVersion = "v0.03"
     Write-Output "[*] AzureADRecon $AzureADReconVersion by Prashant Mahajan (@prashant3535)"
 
     If ($PSVersionTable.PSEdition -eq "Core")
