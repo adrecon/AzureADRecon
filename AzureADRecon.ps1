@@ -21,6 +21,7 @@
     * Groups
     * GroupMembers
     * Devices
+    * ConditionalAccessPolicies
 
     Author     : Prashant Mahajan
 
@@ -64,7 +65,7 @@
 
 .PARAMETER Collect
     Which modules to run; Comma separated; e.g Tenant,Domain (Default all)
-    Valid values include: Tenant, Domain, Licenses, Users, ServicePrincipals, DirectoryRoles, DirectoryRoleMembers, Groups, GroupMembers, Devices.
+    Valid values include: Tenant, Domain, Licenses, Users, ServicePrincipals, DirectoryRoles, DirectoryRoleMembers, Groups, GroupMembers, Devices, ConditionalAccessPolicies.
 
 .PARAMETER OutputType
     Output Type; Comma seperated; e.g STDOUT,CSV,XML,JSON,HTML,Excel (Default STDOUT with -Collect parameter, else CSV and Excel).
@@ -2139,6 +2140,13 @@ Function Export-ADRExcel
             Remove-Variable ADFileName
         }
 
+        $ADFileName = -join ($ReportPath, '\', 'ConditionalAccessPolicies.csv')
+        If (Test-Path $ADFileName) {
+            Get-ADRExcelWorkbook -Name "ConditionalAccessPolicies"
+            Get-ADRExcelImport -ADFileName $ADFileName
+            Remove-Variable ADFileName
+        }
+
         $ADFileName = -join($ReportPath,'\','Licenses.csv')
         If (Test-Path $ADFileName)
         {
@@ -3178,6 +3186,170 @@ Function Get-AADRDevice
     }
 }
 
+Function Convert-ADRGuidArray {
+    <#
+.SYNOPSIS
+    Translates an array of object GUIDs to "DisplayName (GUID)" using a lookup table.
+
+.DESCRIPTION
+    Used by Get-AADRConditionalAccessPolicy to make the Include/Exclude fields human
+    readable. Tokens not present in the map - keywords such as All, None, Office365,
+    GuestsOrExternalUsers, AllTrusted, or GUIDs that could not be resolved - are kept
+    as-is. The result is returned as a comma-separated string.
+
+.PARAMETER Values
+    The array of tokens (GUIDs and/or keywords) to translate.
+
+.PARAMETER Map
+    [hashtable]
+    GUID -> DisplayName lookup table.
+
+.OUTPUTS
+    [string]
+#>
+    param (
+        [Parameter(Mandatory = $false)] $Values,
+        [Parameter(Mandatory = $false)] [hashtable] $Map
+    )
+    If (-not $Values) { return '' }
+    ($Values | ForEach-Object {
+        $tok = [string] $_
+        If ($Map -and $Map.ContainsKey($tok)) { "$($Map[$tok]) ($tok)" } Else { $tok }
+    }) -join ', '
+}
+
+Function Get-AADRConditionalAccessPolicy {
+    <#
+.SYNOPSIS
+    Returns all conditional access policies in the current (or specified) AzureAD.
+
+.DESCRIPTION
+    Returns all conditional access policies in the current (or specified) AzureAD.
+    Referenced object GUIDs (roles, groups, users, applications and named locations)
+    are resolved to "DisplayName (GUID)" where the required scopes are granted
+    (Policy.Read.All, User.Read.All, Directory.Read.All). GUIDs that cannot be
+    resolved are left unchanged.
+
+.PARAMETER Method
+    [string]
+    Which method to use; MSGraph (default).
+
+.OUTPUTS
+    PSObject.
+#>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Method
+    )
+
+    If ($Method -eq 'MSGraph') {
+        Try {
+            $AADRCAPolicies = @( Get-MgIdentityConditionalAccessPolicy -All -ErrorAction Stop )
+        }
+        Catch {
+            Write-Warning "[Get-AADRConditionalAccessPolicy] Error retrieving Conditional Access Policies. Ensure the Policy.Read.All scope is granted."
+            Write-Verbose "[EXCEPTION] $($_.Exception.Message)"
+            Return $null
+        }
+
+        If ($AADRCAPolicies) {
+            Write-Verbose "[*] Total Conditional Access Policies: $($AADRCAPolicies.Count)"
+
+            # ---- Build GUID -> DisplayName lookup tables (best-effort; unresolved GUIDs are kept as-is) ----
+            $RoleMap = @{}; $LocationMap = @{}; $GroupMap = @{}; $UserMap = @{}; $AppMap = @{}
+
+            # Directory role templates cover the roles referenced by CA policies - single call.
+            Try { Get-MgDirectoryRoleTemplate -All -ErrorAction Stop | ForEach-Object { $RoleMap[[string] $_.Id] = $_.DisplayName } }
+            Catch { Write-Verbose "[Get-AADRConditionalAccessPolicy] Could not enumerate directory role templates (Directory.Read.All?). $($_.Exception.Message)" }
+
+            # Named locations - single call.
+            Try { Get-MgIdentityConditionalAccessNamedLocation -All -ErrorAction Stop | ForEach-Object { $LocationMap[[string] $_.Id] = $_.DisplayName } }
+            Catch { Write-Verbose "[Get-AADRConditionalAccessPolicy] Could not enumerate named locations. $($_.Exception.Message)" }
+
+            # Well-known first-party Microsoft application IDs (resolved without a Graph call).
+            $WellKnownApps = @{
+                '00000002-0000-0ff1-ce00-000000000000' = 'Office 365 Exchange Online'
+                '00000003-0000-0ff1-ce00-000000000000' = 'Office 365 SharePoint Online'
+                '00000003-0000-0000-c000-000000000000' = 'Microsoft Graph'
+                '00000004-0000-0ff1-ce00-000000000000' = 'Skype for Business Online'
+                '00000006-0000-0ff1-ce00-000000000000' = 'Office 365 Portal'
+                '00000012-0000-0000-c000-000000000000' = 'Microsoft Rights Management Services'
+                '797f4846-ba00-4fd7-ba43-dac1f8f63013' = 'Windows Azure Service Management API'
+                'c5393580-f805-4401-95e8-94b7a6ef2fc2' = 'Office 365 Management APIs'
+            }
+
+            # Collect distinct referenced GUIDs so groups/users/apps are resolved with the fewest calls.
+            $guidRegex = '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'
+            $GroupIds = New-Object System.Collections.Generic.HashSet[string]
+            $UserIds = New-Object System.Collections.Generic.HashSet[string]
+            $AppIds = New-Object System.Collections.Generic.HashSet[string]
+            $AADRCAPolicies | ForEach-Object {
+                $c = $_.Conditions
+                @($c.Users.IncludeGroups) + @($c.Users.ExcludeGroups) | Where-Object { $_ -match $guidRegex } | ForEach-Object { [void] $GroupIds.Add([string] $_) }
+                @($c.Users.IncludeUsers) + @($c.Users.ExcludeUsers)  | Where-Object { $_ -match $guidRegex } | ForEach-Object { [void] $UserIds.Add([string] $_) }
+                @($c.Applications.IncludeApplications) + @($c.Applications.ExcludeApplications) | Where-Object { $_ -match $guidRegex } | ForEach-Object { [void] $AppIds.Add([string] $_) }
+            }
+
+            ForEach ($gid in $GroupIds) {
+                Try { $GroupMap[$gid] = (Get-MgGroup -GroupId $gid -ErrorAction Stop).DisplayName }
+                Catch { Write-Verbose "[Get-AADRConditionalAccessPolicy] Could not resolve group $gid. $($_.Exception.Message)" }
+            }
+            ForEach ($uid in $UserIds) {
+                Try { $u = Get-MgUser -UserId $uid -ErrorAction Stop; $UserMap[$uid] = $(If ($u.UserPrincipalName) { $u.UserPrincipalName } Else { $u.DisplayName }) }
+                Catch { Write-Verbose "[Get-AADRConditionalAccessPolicy] Could not resolve user $uid. $($_.Exception.Message)" }
+            }
+            ForEach ($aid in $AppIds) {
+                If ($WellKnownApps.ContainsKey($aid)) { $AppMap[$aid] = $WellKnownApps[$aid]; continue }
+                Try { $sp = @( Get-MgServicePrincipal -Filter "appId eq '$aid'" -ErrorAction Stop ) | Select-Object -First 1; If ($sp) { $AppMap[$aid] = $sp.DisplayName } }
+                Catch { Write-Verbose "[Get-AADRConditionalAccessPolicy] Could not resolve application $aid. $($_.Exception.Message)" }
+            }
+
+            $AADRCAPoliciesObj = @()
+            $AADRCAPolicies | ForEach-Object {
+                $Conditions = $_.Conditions
+                $Apps = $Conditions.Applications
+                $Usr = $Conditions.Users
+                $Grant = $_.GrantControls
+                $Session = $_.SessionControls
+
+                # Create the object for each instance.
+                $Obj = New-Object PSObject
+                $Obj | Add-Member -MemberType NoteProperty -Name "DisplayName" -Value $([string] $_.DisplayName)
+                $Obj | Add-Member -MemberType NoteProperty -Name "State" -Value $([string] $_.State)
+                $Obj | Add-Member -MemberType NoteProperty -Name "IncludeUsers" -Value $(Convert-ADRGuidArray -Values $Usr.IncludeUsers -Map $UserMap)
+                $Obj | Add-Member -MemberType NoteProperty -Name "ExcludeUsers" -Value $(Convert-ADRGuidArray -Values $Usr.ExcludeUsers -Map $UserMap)
+                $Obj | Add-Member -MemberType NoteProperty -Name "IncludeGroups" -Value $(Convert-ADRGuidArray -Values $Usr.IncludeGroups -Map $GroupMap)
+                $Obj | Add-Member -MemberType NoteProperty -Name "ExcludeGroups" -Value $(Convert-ADRGuidArray -Values $Usr.ExcludeGroups -Map $GroupMap)
+                $Obj | Add-Member -MemberType NoteProperty -Name "IncludeRoles" -Value $(Convert-ADRGuidArray -Values $Usr.IncludeRoles -Map $RoleMap)
+                $Obj | Add-Member -MemberType NoteProperty -Name "ExcludeRoles" -Value $(Convert-ADRGuidArray -Values $Usr.ExcludeRoles -Map $RoleMap)
+                $Obj | Add-Member -MemberType NoteProperty -Name "IncludeApplications" -Value $(Convert-ADRGuidArray -Values $Apps.IncludeApplications -Map $AppMap)
+                $Obj | Add-Member -MemberType NoteProperty -Name "ExcludeApplications" -Value $(Convert-ADRGuidArray -Values $Apps.ExcludeApplications -Map $AppMap)
+                $Obj | Add-Member -MemberType NoteProperty -Name "UserActions" -Value $([string] ($Apps.IncludeUserActions -join ', '))
+                $Obj | Add-Member -MemberType NoteProperty -Name "ClientAppTypes" -Value $([string] ($Conditions.ClientAppTypes -join ', '))
+                $Obj | Add-Member -MemberType NoteProperty -Name "IncludePlatforms" -Value $([string] ($Conditions.Platforms.IncludePlatforms -join ', '))
+                $Obj | Add-Member -MemberType NoteProperty -Name "ExcludePlatforms" -Value $([string] ($Conditions.Platforms.ExcludePlatforms -join ', '))
+                $Obj | Add-Member -MemberType NoteProperty -Name "IncludeLocations" -Value $(Convert-ADRGuidArray -Values $Conditions.Locations.IncludeLocations -Map $LocationMap)
+                $Obj | Add-Member -MemberType NoteProperty -Name "ExcludeLocations" -Value $(Convert-ADRGuidArray -Values $Conditions.Locations.ExcludeLocations -Map $LocationMap)
+                $Obj | Add-Member -MemberType NoteProperty -Name "GrantControlsOperator" -Value $([string] $Grant.Operator)
+                $Obj | Add-Member -MemberType NoteProperty -Name "GrantControls" -Value $([string] ($Grant.BuiltInControls -join ', '))
+                $Obj | Add-Member -MemberType NoteProperty -Name "SignInFrequency" -Value $([string] $Session.SignInFrequency.Value)
+                $Obj | Add-Member -MemberType NoteProperty -Name "CreatedDateTime" -Value $([string] $_.CreatedDateTime)
+                $Obj | Add-Member -MemberType NoteProperty -Name "ModifiedDateTime" -Value $([string] $_.ModifiedDateTime)
+                $Obj | Add-Member -MemberType NoteProperty -Name "Id" -Value $([string] $_.Id)
+                $AADRCAPoliciesObj += $Obj
+            }
+            Remove-Variable AADRCAPolicies
+        }
+    }
+
+    If ($AADRCAPoliciesObj) {
+        Return $AADRCAPoliciesObj
+    }
+    Else {
+        Return $null
+    }
+}
+
 Function Remove-EmptyAADROutputDir
 {
 <#
@@ -3599,9 +3771,10 @@ Function Invoke-AzureADRecon
         'ServicePrincipals'{ $AADRServicePrincipals = $true }
         'DirectoryRoles' { $AADRDirectoryRoles = $true }
         'DirectoryRoleMembers' { $AADRDirectoryRoleMembers = $true }
-        'Groups' {$AADRGroups = $true }
-        'GroupMembers' {$AADRGroupMembers = $true }
-        'Devices' {$AADRDevices = $true }
+        'Groups' { $AADRGroups = $true }
+        'GroupMembers' { $AADRGroupMembers = $true }
+        'Devices' { $AADRDevices = $true }
+        'ConditionalAccessPolicies' { $AADRConditionalAccessPolicies = $true }
         'Default'
         {
             $AADRTenant = $true
@@ -3614,6 +3787,7 @@ Function Invoke-AzureADRecon
             $AADRGroups = $true
             $AADRGroupMembers = $true
             $AADRDevices = $true
+            $AADRConditionalAccessPolicies = $true
 
             If ($OutputType -eq "Default")
             {
@@ -3764,7 +3938,7 @@ Function Invoke-AzureADRecon
         {
             Write-Output "[Invoke-AzureADRecon] MSGraph Module is installed. Logging in ..."
 
-            $Scopes = "AuditLog.Read.All, User.Read.All, UserAuthenticationMethod.Read.All"
+            $Scopes = "AuditLog.Read.All, User.Read.All, UserAuthenticationMethod.Read.All, Policy.Read.All, Directory.Read.All"
 
             $ADFileName = -join ($returndir, '\', 'MSGraph-Credentials.csv')
             If (Test-Path $ADFileName)
@@ -3988,6 +4162,16 @@ Function Invoke-AzureADRecon
             Remove-Variable AADRObject
         }
         Remove-Variable AADRDevices
+    }
+
+    If ($AADRConditionalAccessPolicies) {
+        Write-Output "[-] Conditional Access Policies"
+        $AADRObject = Get-AADRConditionalAccessPolicy -Method $Method
+        If ($AADRObject) {
+            Export-ADR -ADRObj $AADRObject -AADROutputDir $AADROutputDir -OutputType $OutputType -ADRModuleName "ConditionalAccessPolicies"
+            Remove-Variable AADRObject
+        }
+        Remove-Variable AADRConditionalAccessPolicies
     }
 
     $TotalTime = "{0:N2}" -f ((Get-DateDiff -Date1 (Get-Date) -Date2 $date).TotalMinutes)

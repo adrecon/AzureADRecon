@@ -18,6 +18,7 @@ The following information is gathered by the tool:
 * Groups
 * GroupMembers
 * Devices
+* ConditionalAccessPolicies
 
 ## Getting Started
 
@@ -30,13 +31,14 @@ These instructions will get you a copy of the tool up and running on your local 
     * PowerShell 2.0 or later (Windows 7 includes 2.0)
         * Microsoft Graph Module (https://www.powershellgallery.com/packages/microsoft.graph)
         * `Install-Module -Name Microsoft.Graph`
-        * Scopes required: AuditLog.Read.All, User.Read.All, UserAuthenticationMethod.Read.All
-    * Limited PowerShell Core support (Tested on PowerShell v7.3.1; Excel generation requires Windows)
+        * Scopes required: AuditLog.Read.All, User.Read.All, UserAuthenticationMethod.Read.All, Policy.Read.All, Directory.Read.All
+    * PowerShell Core support (Tested on PowerShell v7.6.5)
 
 
 ### Optional
 
 * Microsoft Excel (to generate the report)
+    * Generated via Microsoft Excel (COM automation) on Windows
 
 ### Installing
 
@@ -99,7 +101,7 @@ When you run AzureADRecon, a `AzureADRecon-Report-<timestamp>` folder will be cr
 
 -Collect <String>
     Which modules to run (Comma separated; e.g Tenant,Domain. Default all)
-    Valid values include: Tenant, Domain, Licenses, Users, ServicePrincipals, DirectoryRoles, DirectoryRoleMembers, Groups, GroupMembers, Devices.
+    Valid values include: Tenant, Domain, Licenses, Users, ServicePrincipals, DirectoryRoles, DirectoryRoleMembers, Groups, GroupMembers, Devices, ConditionalAccessPolicies.
 
 -OutputType <String>
     Output Type; Comma seperated; e.g CSV,STDOUT,Excel (Default STDOUT with -Collect parameter, else CSV and Excel).
